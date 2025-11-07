@@ -173,6 +173,37 @@ function RecipientPortal() {
 
 // ============= LANDING PAGE =============
 function LandingPage({ setCurrentPage, toggleTheme, theme }) {
+  const [stats, setStats] = useState({ totalItemsAvailable: 0, activeDonors: 0, recipientsHelped: 0, partnerInstitutions: 0 });
+  const [testimonials, setTestimonials] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [statsResponse, testimonialsResponse] = await Promise.all([
+          fetch('http://localhost:5000/api/public/stats'),
+          fetch('http://localhost:5000/api/public/testimonials')
+        ]);
+
+        if (statsResponse.ok) {
+          const statsData = await statsResponse.json();
+          setStats(statsData);
+        }
+
+        if (testimonialsResponse.ok) {
+          const testimonialsData = await testimonialsResponse.json();
+          setTestimonials(testimonialsData.testimonials);
+        }
+      } catch (error) {
+        console.error("Error fetching landing page data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
   return React.createElement(
     'div',
     { className: 'landing-page', style: { minHeight: '100vh', backgroundColor: 'var(--color-background)' } },
@@ -198,25 +229,25 @@ function LandingPage({ setCurrentPage, toggleTheme, theme }) {
         React.createElement(
           'div',
           { className: 'card', style: { textAlign: 'center', padding: '24px' } },
-          React.createElement('h3', { style: { fontSize: '32px', margin: '0 0 8px 0' } }, MOCK_DATA.preLoginStats.totalItemsAvailable),
+          React.createElement('h3', { style: { fontSize: '32px', margin: '0 0 8px 0' } }, stats.totalItemsAvailable),
           React.createElement('p', { style: { color: 'var(--color-text-secondary)' } }, 'Items Available')
         ),
         React.createElement(
           'div',
           { className: 'card', style: { textAlign: 'center', padding: '24px' } },
-          React.createElement('h3', { style: { fontSize: '32px', margin: '0 0 8px 0' } }, MOCK_DATA.preLoginStats.activeDonors),
+          React.createElement('h3', { style: { fontSize: '32px', margin: '0 0 8px 0' } }, stats.activeDonors),
           React.createElement('p', { style: { color: 'var(--color-text-secondary)' } }, 'Active Donors')
         ),
         React.createElement(
           'div',
           { className: 'card', style: { textAlign: 'center', padding: '24px' } },
-          React.createElement('h3', { style: { fontSize: '32px', margin: '0 0 8px 0' } }, MOCK_DATA.preLoginStats.recipientsHelped),
+          React.createElement('h3', { style: { fontSize: '32px', margin: '0 0 8px 0' } }, stats.recipientsHelped),
           React.createElement('p', { style: { color: 'var(--color-text-secondary)' } }, 'Recipients Helped')
         ),
         React.createElement(
           'div',
           { className: 'card', style: { textAlign: 'center', padding: '24px' } },
-          React.createElement('h3', { style: { fontSize: '32px', margin: '0 0 8px 0' } }, MOCK_DATA.preLoginStats.partnerInstitutions),
+          React.createElement('h3', { style: { fontSize: '32px', margin: '0 0 8px 0' } }, stats.partnerInstitutions),
           React.createElement('p', { style: { color: 'var(--color-text-secondary)' } }, 'Partner Institutions')
         )
       ),
@@ -227,7 +258,7 @@ function LandingPage({ setCurrentPage, toggleTheme, theme }) {
         React.createElement(
           'div',
           { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' } },
-          MOCK_DATA.testimonials.map(testimonial =>
+          testimonials.map(testimonial =>
             React.createElement(
               'div',
               { key: testimonial.id, className: 'card', style: { padding: '24px', textAlign: 'left' } },

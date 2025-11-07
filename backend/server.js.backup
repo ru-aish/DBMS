@@ -682,7 +682,6 @@ app.get('/api/admin/dashboard', async (req, res) => {
         pending_requests: pendingRequests[0].count
       },
       recentDonors,
-      pendingRequests: requestQueue,
       requestQueue,
       completedRequests,
       recentItems,

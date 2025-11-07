@@ -1,3 +1,5 @@
+import { login as apiLogin, getDonationHistory } from './api.js';
+
 // React Context for Global State Management
 const { useState, useContext, createContext, useEffect } = React;
 
@@ -125,31 +127,13 @@ const LoginForm = ({ login }) => {
     }
 
     try {
-      const response = await fetch('http://localhost:5000/api/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          identifier: formData.email,
-          password: formData.password
-        })
-      });
+      const data = await apiLogin(formData.email, formData.password);
 
-      const data = await response.json();
-
-      if (response.ok) {
+      if (data) {
         const userData = {
           id: data.donor_id,
           name: data.donor_name,
-          email: formData.email,
-          phone: '+91 98765 43210',
-          institution: 'IIT Delhi',
-          address: 'New Delhi, India',
-          registrationDate: '2024-01-15',
-          verificationStatus: 'verified',
-          level: 'Gold',
-          points: 850
+          email: data.email,
         };
         
         login(userData);
@@ -410,38 +394,22 @@ const Navbar = ({ currentPage, setCurrentPage }) => {
 // Dashboard Component
 const Dashboard = ({ onNavigate }) => {
   const { user } = useAuth();
-  const [recentDonations] = useState([
-    {
-      id: 'BTH001',
-      items: 2,
-      date: '15/10/2024',
-      status: 'completed'
-    },
-    {
-      id: 'BTH002',
-      items: 2,
-      date: '20/10/2024',
-      status: 'completed'
-    },
-    {
-      id: 'BTH003',
-      items: 1,
-      date: '25/10/2024',
-      status: 'pending'
-    },
-    {
-      id: 'BTH004',
-      items: 1,
-      date: '28/10/2024',
-      status: 'pending'
-    },
-    {
-      id: 'BTH005',
-      items: 1,
-      date: '30/10/2024',
-      status: 'pending'
+  const [recentDonations, setRecentDonations] = useState([]);
+
+  useEffect(() => {
+    const fetchDonations = async () => {
+      try {
+        const data = await getDonationHistory(user.id);
+        setRecentDonations(data.donations);
+      } catch (error) {
+        console.error('Error fetching donation history:', error);
+      }
+    };
+
+    if (user && user.id) {
+      fetchDonations();
     }
-  ]);
+  }, [user]);
 
   const getStatusBadge = (status) => {
     const badges = {
