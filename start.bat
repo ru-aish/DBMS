@@ -40,18 +40,29 @@ if not exist "backend\server.js" (
     exit /b 1
 )
 
-echo [1/3] Stopping any previous server instances...
-
-REM Method 1: Kill process on port 3000 using netstat
-for /f "tokens=5" %%a in ('netstat -aon 2^>nul ^| findstr ":3000.*LISTENING"') do (
-    echo       Killing process on port 3000 (PID: %%a)
-    taskkill /F /PID %%a >nul 2>nul
+REM Read BACKEND_PORT from .env file (default 3000)
+set "BACKEND_PORT=3000"
+for /f "usebackq tokens=1,2 delims==" %%a in (".env") do (
+    if /i "%%a"=="BACKEND_PORT" set "BACKEND_PORT=%%b"
 )
 
-REM Method 2: Kill any node process that might be our server
-for /f "tokens=2" %%a in ('tasklist /fi "imagename eq node.exe" /fo list 2^>nul ^| findstr "PID:"') do (
-    REM This kills all node processes - be careful in dev environments
-    REM taskkill /F /PID %%a >nul 2>nul
+REM Read MYSQL_PORT from .env file (default 3306)
+set "MYSQL_PORT=3306"
+for /f "usebackq tokens=1,2 delims==" %%a in (".env") do (
+    if /i "%%a"=="MYSQL_PORT" set "MYSQL_PORT=%%b"
+)
+
+echo [INFO] Configuration:
+echo       Backend Port: !BACKEND_PORT!
+echo       MySQL Port:   !MYSQL_PORT!
+echo.
+
+echo [1/3] Stopping any previous server instances...
+
+REM Kill process on port using netstat
+for /f "tokens=5" %%a in ('netstat -aon 2^>nul ^| findstr ":!BACKEND_PORT!.*LISTENING"') do (
+    echo       Killing process on port !BACKEND_PORT! (PID: %%a)
+    taskkill /F /PID %%a >nul 2>nul
 )
 
 REM Wait for port to be released
@@ -59,11 +70,11 @@ timeout /t 2 /nobreak >nul
 echo       [OK] Previous instances cleaned up
 echo.
 
-echo [2/3] Verifying port 3000 is available...
-netstat -aon 2>nul | findstr ":3000.*LISTENING" >nul 2>nul
+echo [2/3] Verifying port !BACKEND_PORT! is available...
+netstat -aon 2>nul | findstr ":!BACKEND_PORT!.*LISTENING" >nul 2>nul
 if %errorlevel% equ 0 (
-    echo [WARNING] Port 3000 is still in use!
-    echo          Please close any application using port 3000.
+    echo [WARNING] Port !BACKEND_PORT! is still in use!
+    echo          Please close any application using port !BACKEND_PORT!.
     echo          Or wait a moment and try again.
     echo.
     timeout /t 3 /nobreak >nul
@@ -74,13 +85,13 @@ echo.
 echo [3/3] Starting server...
 echo.
 echo ============================================
-echo Server starting on http://localhost:3000
+echo Server starting on http://localhost:!BACKEND_PORT!
 echo ============================================
 echo.
 echo Portal URLs:
-echo   Admin:     http://localhost:3000/frontend/ADMIN/index.html
-echo   Donor:     http://localhost:3000/frontend/donor-portal/index.html
-echo   Recipient: http://localhost:3000/frontend/recipient-portal/index.html
+echo   Admin:     http://localhost:!BACKEND_PORT!/frontend/ADMIN/index.html
+echo   Donor:     http://localhost:!BACKEND_PORT!/frontend/donor-portal/index.html
+echo   Recipient: http://localhost:!BACKEND_PORT!/frontend/recipient-portal/index.html
 echo.
 echo Press Ctrl+C to stop the server.
 echo ============================================
@@ -95,8 +106,8 @@ if %errorlevel% neq 0 (
     echo [ERROR] Server stopped unexpectedly!
     echo.
     echo Common issues:
-    echo   1. Port 3000 already in use
-    echo   2. MySQL not running
+    echo   1. Port !BACKEND_PORT! already in use
+    echo   2. MySQL not running on port !MYSQL_PORT!
     echo   3. Invalid .env configuration
     echo.
     echo Check the error message above for details.

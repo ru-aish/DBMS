@@ -39,10 +39,12 @@ if not exist ".env" (
     echo [2/5] Creating .env configuration file...
     (
         echo MYSQL_HOST=localhost
+        echo MYSQL_PORT=3306
         echo MYSQL_USER=root
         echo MYSQL_PASSWORD=
         echo MYSQL_DATABASE=donation_system
         echo BACKEND_PORT=3000
+        echo HOST=0.0.0.0
     ) > .env
     echo       [OK] .env file created
     echo       Please edit .env with your MySQL credentials if needed.

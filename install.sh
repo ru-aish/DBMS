@@ -27,10 +27,12 @@ if [ ! -f ".env" ]; then
     echo "[2/5] Creating .env configuration file..."
     cat > .env << EOF
 MYSQL_HOST=localhost
+MYSQL_PORT=3306
 MYSQL_USER=root
 MYSQL_PASSWORD=
 MYSQL_DATABASE=donation_system
 BACKEND_PORT=3000
+HOST=0.0.0.0
 EOF
     echo ".env file created. Please edit it with your MySQL credentials."
     echo ""
