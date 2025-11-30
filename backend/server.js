@@ -14,16 +14,22 @@ app.use(bodyParser.json());
 // Serve static files from the frontend directory
 app.use('/frontend', express.static(path.join(__dirname, '../frontend')));
 
-const pool = mysql.createPool({
+const poolConfig = {
   host: process.env.MYSQL_HOST || 'localhost',
   user: process.env.MYSQL_USER || 'root',
   password: process.env.MYSQL_PASSWORD || '',
   database: process.env.MYSQL_DATABASE || 'donation_system',
-  socketPath: '/opt/lampp/var/mysql/mysql.sock',
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0
-});
+};
+
+// Only add socketPath on Linux with XAMPP
+if (process.platform === 'linux' && process.env.MYSQL_SOCKET) {
+  poolConfig.socketPath = process.env.MYSQL_SOCKET;
+}
+
+const pool = mysql.createPool(poolConfig);
 
 app.post('/api/login', async (req, res) => {
   try {
