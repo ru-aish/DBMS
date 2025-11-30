@@ -47,12 +47,12 @@ const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  const login = async (email, password) => {
+  const login = async (identifier) => {
     try {
       const response = await fetch('http://localhost:5000/api/recipient/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier: email })
+        body: JSON.stringify({ identifier: identifier })
       });
 
       if (response.ok) {
@@ -281,23 +281,31 @@ function LandingPage({ setCurrentPage, toggleTheme, theme }) {
 
 // ============= LOGIN PAGE =============
 function LoginPage({ setCurrentPage, toggleTheme, theme }) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const { login } = useContext(AuthContext);
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    if (!email) {
-      setError('Phone number or ID is required');
+    if (!identifier) {
+      setError('Phone number or Recipient ID is required');
       return;
     }
-    const success = await login(email, password);
+    setLoading(true);
+    setError('');
+    const success = await login(identifier);
+    setLoading(false);
     if (success) {
       setCurrentPage('dashboard');
     } else {
-      setError('Invalid credentials');
+      setError('Recipient not found. Please check your phone number or ID.');
     }
+  };
+
+  const fillDemoCredentials = () => {
+    setIdentifier('9876543210');
+    setError('');
   };
 
   return React.createElement(
@@ -309,7 +317,7 @@ function LoginPage({ setCurrentPage, toggleTheme, theme }) {
       React.createElement(
         'div',
         { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' } },
-        React.createElement('h1', { style: { margin: 0, fontSize: '28px', color: 'var(--color-primary)' } }, 'Login'),
+        React.createElement('h1', { style: { margin: 0, fontSize: '28px', color: 'var(--color-primary)' } }, 'Recipient Login'),
         React.createElement('button', { className: 'btn btn--secondary', onClick: toggleTheme }, theme === 'light' ? '🌙' : '☀️')
       ),
       React.createElement(
@@ -321,29 +329,64 @@ function LoginPage({ setCurrentPage, toggleTheme, theme }) {
           error && React.createElement('div', { style: { color: 'var(--color-error)', marginBottom: '16px', padding: '12px', backgroundColor: 'rgba(192, 21, 47, 0.1)', borderRadius: '6px' } }, error),
           React.createElement(
             'div',
-            { style: { marginBottom: '16px' } },
-            React.createElement('label', { style: { display: 'block', marginBottom: '8px', fontWeight: '500' } }, 'Email or Phone'),
-            React.createElement('input', { type: 'text', className: 'form-control', value: email, onChange: (e) => setEmail(e.target.value), placeholder: 'Enter your email or phone' })
-          ),
-          React.createElement(
-            'div',
             { style: { marginBottom: '24px' } },
-            React.createElement('label', { style: { display: 'block', marginBottom: '8px', fontWeight: '500' } }, 'Password'),
-            React.createElement('input', { type: 'password', className: 'form-control', value: password, onChange: (e) => setPassword(e.target.value), placeholder: 'Enter your password' })
+            React.createElement('label', { style: { display: 'block', marginBottom: '8px', fontWeight: '500' } }, 'Phone Number or Recipient ID'),
+            React.createElement('input', { 
+              type: 'text', 
+              className: 'form-control', 
+              value: identifier, 
+              onChange: (e) => setIdentifier(e.target.value), 
+              placeholder: 'Enter guardian phone or recipient ID' 
+            })
           ),
-          React.createElement('button', { type: 'submit', className: 'btn btn--primary btn--full-width', style: { marginBottom: '16px' } }, 'Login'),
+          React.createElement('button', { 
+            type: 'submit', 
+            className: 'btn btn--primary btn--full-width', 
+            style: { marginBottom: '16px' },
+            disabled: loading
+          }, loading ? 'Logging in...' : 'Login'),
           React.createElement(
             'p',
             { style: { textAlign: 'center', color: 'var(--color-text-secondary)' } },
             'Don\'t have an account? ',
             React.createElement('button', { type: 'button', className: 'btn btn--outline', style: { padding: 0, border: 'none', color: 'var(--color-primary)', cursor: 'pointer', textDecoration: 'underline' }, onClick: () => setCurrentPage('register') }, 'Register here')
-          ),
-          React.createElement(
-            'p',
-            { style: { textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: '12px', marginTop: '16px' } },
-            'Demo: recipient@example.com / password123'
           )
         )
+      ),
+      // Example Login Box
+      React.createElement(
+        'div',
+        { className: 'card', style: { padding: '20px', marginTop: '16px', backgroundColor: 'var(--color-surface)', border: '2px dashed var(--color-primary)' } },
+        React.createElement('h4', { style: { margin: '0 0 12px 0', fontSize: '14px', color: 'var(--color-primary)' } }, 'Demo Login'),
+        React.createElement('p', { style: { margin: '0 0 12px 0', fontSize: '13px', color: 'var(--color-text-secondary)' } }, 
+          'Use the example credentials below to explore the portal:'
+        ),
+        React.createElement(
+          'div',
+          { style: { backgroundColor: 'var(--color-background)', padding: '12px', borderRadius: '6px', marginBottom: '12px' } },
+          React.createElement('p', { style: { margin: '0 0 4px 0', fontSize: '13px' } }, 
+            React.createElement('strong', null, 'Phone: '), '9876543210'
+          ),
+          React.createElement('p', { style: { margin: 0, fontSize: '12px', color: 'var(--color-text-secondary)' } }, 
+            '(Demo recipient account)'
+          )
+        ),
+        React.createElement('button', { 
+          type: 'button',
+          className: 'btn btn--secondary btn--full-width', 
+          onClick: fillDemoCredentials,
+          style: { fontSize: '13px' }
+        }, 'Use Demo Credentials')
+      ),
+      React.createElement(
+        'div',
+        { style: { textAlign: 'center', marginTop: '16px' } },
+        React.createElement('button', { 
+          type: 'button', 
+          className: 'btn btn--outline', 
+          onClick: () => setCurrentPage('landing'),
+          style: { fontSize: '13px' }
+        }, '← Back to Home')
       )
     )
   );
