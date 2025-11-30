@@ -25,6 +25,11 @@ const pool = mysql.createPool({
   queueLimit: 0
 });
 
+// ============================================================================
+// DONOR PORTAL ENDPOINTS
+// ============================================================================
+
+// Donor login
 app.post('/api/login', async (req, res) => {
   try {
     const { identifier, password } = req.body;
@@ -71,11 +76,12 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
+// Donor registration
 app.post('/api/register', async (req, res) => {
   try {
-    const { full_name, email, phone, institution, year_class, address, password } = req.body;
+    const { full_name, email, phone, institution, password } = req.body;
 
-    if (!full_name || !email || !phone || !institution || !year_class || !address || !password) {
+    if (!full_name || !email || !phone || !institution || !password) {
       return res.status(400).json({ message: 'All fields are required' });
     }
 
@@ -94,8 +100,8 @@ app.post('/api/register', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const [result] = await connection.execute(
-      'INSERT INTO DONORS (full_name, email, phone, institution, year_class, address, password, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [full_name, email, phone, institution, year_class, address, hashedPassword, 'active']
+      'INSERT INTO DONORS (full_name, email, phone, institution, password, status) VALUES (?, ?, ?, ?, ?, ?)',
+      [full_name, email, phone, institution, hashedPassword, 'active']
     );
 
     connection.release();
@@ -111,10 +117,32 @@ app.post('/api/register', async (req, res) => {
   }
 });
 
-// ============= PUBLIC ENDPOINTS =============
+// Get donor's donations
+app.get('/api/donor/:donorId/donations', async (req, res) => {
+  try {
+    const { donorId } = req.params;
+    const connection = await pool.getConnection();
+    const [donations] = await connection.execute(
+      `SELECT item_id as id, item_name as items, donation_date as date, availability_status as status
+       FROM ITEMS
+       WHERE donor_id = ?
+       ORDER BY donation_date DESC`,
+      [donorId]
+    );
+    connection.release();
+    return res.json({ donations });
+  } catch (error) {
+    console.error('Error fetching donations:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ============================================================================
+// PUBLIC ENDPOINTS
+// ============================================================================
 
 // Get public statistics for landing page
-app.get('/api/public/stats', async (req, res) => {
+app.get('/api/public/stats', async (_req, res) => {
   try {
     const connection = await pool.getConnection();
     
@@ -154,10 +182,9 @@ app.get('/api/public/stats', async (req, res) => {
 });
 
 // Get public testimonials for landing page
-app.get('/api/public/testimonials', async (req, res) => {
+app.get('/api/public/testimonials', async (_req, res) => {
   try {
-    // For now, return static testimonials since we don't have a TESTIMONIALS table yet
-    // In future, this can be made dynamic by creating a TESTIMONIALS table
+    // Static testimonials (can be made dynamic later)
     const testimonials = [
       {
         id: 1,
@@ -187,7 +214,9 @@ app.get('/api/public/testimonials', async (req, res) => {
   }
 });
 
-// ============= RECIPIENT ENDPOINTS =============
+// ============================================================================
+// RECIPIENT PORTAL ENDPOINTS
+// ============================================================================
 
 // Recipient login - using recipient_code (generated after admin approval)
 app.post('/api/recipient/login', async (req, res) => {
@@ -200,8 +229,8 @@ app.post('/api/recipient/login', async (req, res) => {
 
     const connection = await pool.getConnection();
     const [rows] = await connection.execute(
-      `SELECT recipient_id, full_name, age, gender, guardian_contact, address, 
-              verification_status, recipient_code 
+      `SELECT recipient_id, org_name, org_type, contact_person, phone, email, address,
+              verification_status, recipient_code, registration_date
        FROM RECIPIENTS 
        WHERE recipient_code = ? AND verification_status = 'verified'`,
       [identifier]
@@ -216,11 +245,11 @@ app.post('/api/recipient/login', async (req, res) => {
     return res.json({
       message: 'Login successful',
       recipient_id: recipient.recipient_id,
-      name: recipient.full_name,
-      phone: recipient.guardian_contact,
-      email: recipient.guardian_contact,
+      name: recipient.org_name,
+      phone: recipient.phone,
+      email: recipient.email || recipient.phone,
       recipientCode: recipient.recipient_code,
-      registrationDate: new Date().toISOString().split('T')[0]
+      registrationDate: recipient.registration_date
     });
   } catch (error) {
     console.error('Recipient login error:', error);
@@ -233,14 +262,19 @@ app.post('/api/recipient/register', async (req, res) => {
   try {
     const { full_name, guardian_name, guardian_contact, address, application_letter } = req.body;
 
-    if (!full_name || !guardian_name || !guardian_contact || !address) {
+    // Map old field names to new schema
+    const org_name = full_name;
+    const contact_person = guardian_name;
+    const phone = guardian_contact;
+
+    if (!org_name || !contact_person || !phone || !address) {
       return res.status(400).json({ message: 'Organization name, contact person, phone, and address are required' });
     }
 
     const connection = await pool.getConnection();
     const [existingUsers] = await connection.execute(
-      'SELECT recipient_id FROM RECIPIENTS WHERE guardian_contact = ?',
-      [guardian_contact]
+      'SELECT recipient_id FROM RECIPIENTS WHERE phone = ?',
+      [phone]
     );
 
     if (existingUsers.length > 0) {
@@ -249,8 +283,8 @@ app.post('/api/recipient/register', async (req, res) => {
     }
 
     const [result] = await connection.execute(
-      'INSERT INTO RECIPIENTS (full_name, age, gender, guardian_name, guardian_contact, address, application_letter, verification_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [full_name, null, null, guardian_name, guardian_contact, address, application_letter || null, 'pending']
+      'INSERT INTO RECIPIENTS (org_name, contact_person, phone, address, application_letter, verification_status) VALUES (?, ?, ?, ?, ?, ?)',
+      [org_name, contact_person, phone, address, application_letter || null, 'pending']
     );
     connection.release();
 
@@ -265,11 +299,16 @@ app.post('/api/recipient/register', async (req, res) => {
 });
 
 // Get available items
-app.get('/api/items/available', async (req, res) => {
+app.get('/api/items/available', async (_req, res) => {
   try {
     const connection = await pool.getConnection();
     const [items] = await connection.execute(
-      'SELECT item_id, item_name, category, subcategory, size_info, condition_status, description, estimated_value FROM ITEMS WHERE availability_status = "available" ORDER BY donation_date DESC'
+      `SELECT i.item_id, i.item_name, i.category, i.condition_status, i.description, 
+              i.estimated_value, i.quantity, d.full_name as donor_name
+       FROM ITEMS i
+       LEFT JOIN DONORS d ON i.donor_id = d.donor_id
+       WHERE i.availability_status = "available" 
+       ORDER BY i.donation_date DESC`
     );
     connection.release();
     return res.json({ items });
@@ -312,8 +351,8 @@ app.post('/api/recipient/request', async (req, res) => {
 
     // Create distribution record
     await connection.execute(
-      'INSERT INTO DISTRIBUTIONS (item_id, recipient_id, distribution_date, notes) VALUES (?, ?, NOW(), ?)',
-      [item_id, recipient_id, `Auto-allocated: ${request_reason || 'Item requested'}`]
+      'INSERT INTO DISTRIBUTIONS (item_id, recipient_id, quantity, notes) VALUES (?, ?, ?, ?)',
+      [item_id, recipient_id, quantity || 1, `Auto-allocated: ${request_reason || 'Item requested'}`]
     );
 
     // Update item status to distributed
@@ -340,15 +379,15 @@ app.get('/api/recipient/:recipientId/requests', async (req, res) => {
   try {
     const { recipientId } = req.params;
     const connection = await pool.getConnection();
-     const [requests] = await connection.execute(
-       `SELECT ir.request_id, ir.request_date, ir.request_status, ir.request_reason, ir.quantity_requested,
+    const [requests] = await connection.execute(
+      `SELECT ir.request_id, ir.request_date, ir.request_status, ir.request_reason, ir.quantity_requested,
         i.item_name, i.category, i.estimated_value 
         FROM ITEM_REQUESTS ir 
         JOIN ITEMS i ON ir.item_id = i.item_id 
         WHERE ir.recipient_id = ? 
         ORDER BY ir.request_date DESC`,
-       [recipientId]
-     );
+      [recipientId]
+    );
     connection.release();
     return res.json({ requests });
   } catch (error) {
@@ -396,8 +435,8 @@ app.get('/api/recipient/:recipientId/distributions', async (req, res) => {
     const { recipientId } = req.params;
     const connection = await pool.getConnection();
     const [distributions] = await connection.execute(
-      `SELECT d.distribution_id, d.distribution_date, d.distribution_method, 
-       d.satisfaction_rating as rating, d.quantity, d.recipient_feedback, d.distributed_by,
+      `SELECT d.distribution_id, d.distribution_date, d.quantity,
+       d.satisfaction_rating as rating, d.recipient_feedback, d.notes,
        i.item_name, i.category, i.estimated_value, i.condition_status,
        i.donor_id
        FROM DISTRIBUTIONS d 
@@ -459,7 +498,7 @@ app.get('/api/recipient/:recipientId/dashboard', async (req, res) => {
 
     // Total value of items received
     const [totalValue] = await connection.execute(
-      `SELECT SUM(i.estimated_value) as total 
+      `SELECT COALESCE(SUM(i.estimated_value), 0) as total 
        FROM DISTRIBUTIONS d 
        JOIN ITEMS i ON d.item_id = i.item_id 
        WHERE d.recipient_id = ?`,
@@ -487,7 +526,10 @@ app.get('/api/recipient/:recipientId/profile', async (req, res) => {
     const { recipientId } = req.params;
     const connection = await pool.getConnection();
     const [profile] = await connection.execute(
-      'SELECT recipient_id, full_name, age, gender, guardian_name, guardian_contact, address, needs_description, registration_date, verification_status FROM RECIPIENTS WHERE recipient_id = ?',
+      `SELECT recipient_id, org_name as full_name, org_type, contact_person as guardian_name, 
+              phone as guardian_contact, email, address, application_letter as needs_description, 
+              registration_date, verification_status
+       FROM RECIPIENTS WHERE recipient_id = ?`,
       [recipientId]
     );
     connection.release();
@@ -511,7 +553,7 @@ app.put('/api/recipient/:recipientId/profile', async (req, res) => {
 
     const connection = await pool.getConnection();
     await connection.execute(
-      'UPDATE RECIPIENTS SET full_name = ?, guardian_contact = ?, address = ? WHERE recipient_id = ?',
+      'UPDATE RECIPIENTS SET org_name = ?, phone = ?, address = ? WHERE recipient_id = ?',
       [full_name, guardian_contact, address, recipientId]
     );
     connection.release();
@@ -522,26 +564,9 @@ app.put('/api/recipient/:recipientId/profile', async (req, res) => {
   }
 });
 
-app.get('/api/donor/:donorId/donations', async (req, res) => {
-  try {
-    const { donorId } = req.params;
-    const connection = await pool.getConnection();
-    const [donations] = await connection.execute(
-      `SELECT i.item_id as id, i.item_name as items, i.donation_date as date, i.availability_status as status
-       FROM ITEMS i
-       WHERE i.donor_id = ?
-       ORDER BY i.donation_date DESC`,
-      [donorId]
-    );
-    connection.release();
-    return res.json({ donations });
-  } catch (error) {
-    console.error('Error fetching donations:', error);
-    return res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// ============= ADMIN ENDPOINTS =============
+// ============================================================================
+// ADMIN PORTAL ENDPOINTS
+// ============================================================================
 
 // Admin login
 app.post('/api/admin/login', async (req, res) => {
@@ -554,7 +579,7 @@ app.post('/api/admin/login', async (req, res) => {
 
     const connection = await pool.getConnection();
     const [rows] = await connection.execute(
-      'SELECT admin_id, full_name, email, password, role, status FROM ADMINS WHERE email = ? AND status = "active"',
+      'SELECT admin_id, full_name, email, password, status FROM ADMINS WHERE email = ? AND status = "active"',
       [email]
     );
     connection.release();
@@ -578,7 +603,7 @@ app.post('/api/admin/login', async (req, res) => {
       admin_id: admin.admin_id,
       name: admin.full_name,
       email: admin.email,
-      role: admin.role
+      role: 'admin'
     });
   } catch (error) {
     console.error('Admin login error:', error);
@@ -587,7 +612,7 @@ app.post('/api/admin/login', async (req, res) => {
 });
 
 // Admin Dashboard Stats
-app.get('/api/admin/dashboard', async (req, res) => {
+app.get('/api/admin/dashboard', async (_req, res) => {
   try {
     const connection = await pool.getConnection();
 
@@ -596,9 +621,9 @@ app.get('/api/admin/dashboard', async (req, res) => {
       'SELECT COUNT(*) as count FROM DONORS WHERE status = "active"'
     );
 
-    // Get total verified communities
+    // Get total verified communities (recipients)
     const [verifiedCommunities] = await connection.execute(
-      'SELECT COUNT(*) as count FROM INSTITUTIONS WHERE verification_status = "verified"'
+      'SELECT COUNT(*) as count FROM RECIPIENTS WHERE verification_status = "verified"'
     );
 
     // Get total items in stock
@@ -608,7 +633,7 @@ app.get('/api/admin/dashboard', async (req, res) => {
 
     // Get pending requests
     const [pendingRequests] = await connection.execute(
-      'SELECT COUNT(*) as count FROM COMMUNITY_REQUESTS WHERE status = "pending"'
+      'SELECT COUNT(*) as count FROM ITEM_REQUESTS WHERE request_status = "pending"'
     );
 
     // Get recent donors with their last donation info
@@ -624,25 +649,28 @@ app.get('/api/admin/dashboard', async (req, res) => {
        LIMIT 5`
     );
 
-    // Get request queue status
+    // Get pending item requests queue
     const [requestQueue] = await connection.execute(
-      `SELECT cr.request_id, i.name as community_name, cr.date_requested,
-       cr.status, cr.items_total, cr.items_allocated, cr.queue_position
-       FROM COMMUNITY_REQUESTS cr
-       JOIN INSTITUTIONS i ON cr.institution_id = i.institution_id
-       WHERE cr.status IN ('pending', 'in_fulfillment')
-       ORDER BY cr.queue_position ASC, cr.date_requested ASC
+      `SELECT ir.request_id, r.org_name as community_name, ir.request_date as date_requested,
+       ir.request_status as status, ir.quantity_requested as items_total, 
+       i.item_name, i.category
+       FROM ITEM_REQUESTS ir
+       JOIN RECIPIENTS r ON ir.recipient_id = r.recipient_id
+       JOIN ITEMS i ON ir.item_id = i.item_id
+       WHERE ir.request_status = 'pending'
+       ORDER BY ir.request_date ASC
        LIMIT 5`
     );
 
     // Get completed requests (last 7 days)
     const [completedRequests] = await connection.execute(
-      `SELECT cr.request_id, i.name as community_name, cr.items_total as items_count,
-       cr.completion_date, 'Finished' as status
-       FROM COMMUNITY_REQUESTS cr
-       JOIN INSTITUTIONS i ON cr.institution_id = i.institution_id
-       WHERE cr.status = 'completed' AND cr.completion_date >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-       ORDER BY cr.completion_date DESC
+      `SELECT ir.request_id, r.org_name as community_name, ir.quantity_requested as items_count,
+       ir.request_date as completion_date, 'Finished' as status
+       FROM ITEM_REQUESTS ir
+       JOIN RECIPIENTS r ON ir.recipient_id = r.recipient_id
+       WHERE ir.request_status IN ('approved', 'fulfilled') 
+       AND ir.request_date >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+       ORDER BY ir.request_date DESC
        LIMIT 5`
     );
 
@@ -659,38 +687,26 @@ app.get('/api/admin/dashboard', async (req, res) => {
     // Get time-based stats (7, 30, 90 days)
     const [stats7Days] = await connection.execute(
       `SELECT 
-        COUNT(DISTINCT i.item_id) as items_donated,
-        COUNT(DISTINCT d.distribution_id) as items_distributed,
-        COUNT(DISTINCT cr.request_id) as requests_fulfilled,
-        (SELECT COUNT(*) FROM COMMUNITY_REQUESTS WHERE status = 'pending' AND date_requested >= DATE_SUB(NOW(), INTERVAL 7 DAY)) as requests_pending
-       FROM ITEMS i
-       LEFT JOIN DISTRIBUTIONS d ON i.item_id = d.item_id AND d.distribution_date >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-       LEFT JOIN COMMUNITY_REQUESTS cr ON cr.completion_date >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-       WHERE i.donation_date >= DATE_SUB(NOW(), INTERVAL 7 DAY)`
+        (SELECT COUNT(*) FROM ITEMS WHERE donation_date >= DATE_SUB(NOW(), INTERVAL 7 DAY)) as items_donated,
+        (SELECT COUNT(*) FROM DISTRIBUTIONS WHERE distribution_date >= DATE_SUB(NOW(), INTERVAL 7 DAY)) as items_distributed,
+        (SELECT COUNT(*) FROM ITEM_REQUESTS WHERE request_status IN ('approved', 'fulfilled') AND request_date >= DATE_SUB(NOW(), INTERVAL 7 DAY)) as requests_fulfilled,
+        (SELECT COUNT(*) FROM ITEM_REQUESTS WHERE request_status = 'pending' AND request_date >= DATE_SUB(NOW(), INTERVAL 7 DAY)) as requests_pending`
     );
 
     const [stats30Days] = await connection.execute(
       `SELECT 
-        COUNT(DISTINCT i.item_id) as items_donated,
-        COUNT(DISTINCT d.distribution_id) as items_distributed,
-        COUNT(DISTINCT cr.request_id) as requests_fulfilled,
-        (SELECT COUNT(*) FROM COMMUNITY_REQUESTS WHERE status = 'pending' AND date_requested >= DATE_SUB(NOW(), INTERVAL 30 DAY)) as requests_pending
-       FROM ITEMS i
-       LEFT JOIN DISTRIBUTIONS d ON i.item_id = d.item_id AND d.distribution_date >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-       LEFT JOIN COMMUNITY_REQUESTS cr ON cr.completion_date >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-       WHERE i.donation_date >= DATE_SUB(NOW(), INTERVAL 30 DAY)`
+        (SELECT COUNT(*) FROM ITEMS WHERE donation_date >= DATE_SUB(NOW(), INTERVAL 30 DAY)) as items_donated,
+        (SELECT COUNT(*) FROM DISTRIBUTIONS WHERE distribution_date >= DATE_SUB(NOW(), INTERVAL 30 DAY)) as items_distributed,
+        (SELECT COUNT(*) FROM ITEM_REQUESTS WHERE request_status IN ('approved', 'fulfilled') AND request_date >= DATE_SUB(NOW(), INTERVAL 30 DAY)) as requests_fulfilled,
+        (SELECT COUNT(*) FROM ITEM_REQUESTS WHERE request_status = 'pending' AND request_date >= DATE_SUB(NOW(), INTERVAL 30 DAY)) as requests_pending`
     );
 
     const [stats90Days] = await connection.execute(
       `SELECT 
-        COUNT(DISTINCT i.item_id) as items_donated,
-        COUNT(DISTINCT d.distribution_id) as items_distributed,
-        COUNT(DISTINCT cr.request_id) as requests_fulfilled,
-        (SELECT COUNT(*) FROM COMMUNITY_REQUESTS WHERE status = 'pending' AND date_requested >= DATE_SUB(NOW(), INTERVAL 90 DAY)) as requests_pending
-       FROM ITEMS i
-       LEFT JOIN DISTRIBUTIONS d ON i.item_id = d.item_id AND d.distribution_date >= DATE_SUB(NOW(), INTERVAL 90 DAY)
-       LEFT JOIN COMMUNITY_REQUESTS cr ON cr.completion_date >= DATE_SUB(NOW(), INTERVAL 90 DAY)
-       WHERE i.donation_date >= DATE_SUB(NOW(), INTERVAL 90 DAY)`
+        (SELECT COUNT(*) FROM ITEMS WHERE donation_date >= DATE_SUB(NOW(), INTERVAL 90 DAY)) as items_donated,
+        (SELECT COUNT(*) FROM DISTRIBUTIONS WHERE distribution_date >= DATE_SUB(NOW(), INTERVAL 90 DAY)) as items_distributed,
+        (SELECT COUNT(*) FROM ITEM_REQUESTS WHERE request_status IN ('approved', 'fulfilled') AND request_date >= DATE_SUB(NOW(), INTERVAL 90 DAY)) as requests_fulfilled,
+        (SELECT COUNT(*) FROM ITEM_REQUESTS WHERE request_status = 'pending' AND request_date >= DATE_SUB(NOW(), INTERVAL 90 DAY)) as requests_pending`
     );
 
     connection.release();
@@ -796,58 +812,59 @@ app.get('/api/admin/donors', async (req, res) => {
   }
 });
 
-// Get all communities/institutions
+// Get all communities/recipients
 app.get('/api/admin/communities', async (req, res) => {
   try {
     const { page = 1, limit = 10, type, verification_status, search } = req.query;
     const offset = (page - 1) * limit;
 
-    let query = `SELECT i.institution_id as community_id, i.name, i.type, i.contact_person,
-                 i.email, i.phone, i.address, i.verification_status,
-                 COUNT(DISTINCT cr.request_id) as total_requests,
-                 COALESCE(SUM(cr.items_allocated), 0) as items_received,
-                 i.registration_date
-                 FROM INSTITUTIONS i
-                 LEFT JOIN COMMUNITY_REQUESTS cr ON i.institution_id = cr.institution_id
+    let query = `SELECT r.recipient_id as community_id, r.org_name as name, r.org_type as type, 
+                 r.contact_person, r.email, r.phone, r.address, r.verification_status,
+                 COUNT(DISTINCT ir.request_id) as total_requests,
+                 COALESCE(COUNT(DISTINCT d.distribution_id), 0) as items_received,
+                 r.registration_date
+                 FROM RECIPIENTS r
+                 LEFT JOIN ITEM_REQUESTS ir ON r.recipient_id = ir.recipient_id
+                 LEFT JOIN DISTRIBUTIONS d ON r.recipient_id = d.recipient_id
                  WHERE 1=1`;
     
     const params = [];
 
     if (type) {
-      query += ' AND i.type = ?';
+      query += ' AND r.org_type = ?';
       params.push(type);
     }
 
     if (verification_status) {
-      query += ' AND i.verification_status = ?';
+      query += ' AND r.verification_status = ?';
       params.push(verification_status);
     }
 
     if (search) {
-      query += ' AND (i.name LIKE ? OR i.contact_person LIKE ? OR i.email LIKE ?)';
+      query += ' AND (r.org_name LIKE ? OR r.contact_person LIKE ? OR r.email LIKE ?)';
       params.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
 
-    query += ' GROUP BY i.institution_id ORDER BY i.registration_date DESC LIMIT ? OFFSET ?';
+    query += ' GROUP BY r.recipient_id ORDER BY r.registration_date DESC LIMIT ? OFFSET ?';
     params.push(parseInt(limit), parseInt(offset));
 
     const connection = await pool.getConnection();
     const [communities] = await connection.execute(query, params);
     
     // Get total count
-    let countQuery = 'SELECT COUNT(*) as total FROM INSTITUTIONS i WHERE 1=1';
+    let countQuery = 'SELECT COUNT(*) as total FROM RECIPIENTS r WHERE 1=1';
     const countParams = [];
     
     if (type) {
-      countQuery += ' AND i.type = ?';
+      countQuery += ' AND r.org_type = ?';
       countParams.push(type);
     }
     if (verification_status) {
-      countQuery += ' AND i.verification_status = ?';
+      countQuery += ' AND r.verification_status = ?';
       countParams.push(verification_status);
     }
     if (search) {
-      countQuery += ' AND (i.name LIKE ? OR i.contact_person LIKE ? OR i.email LIKE ?)';
+      countQuery += ' AND (r.org_name LIKE ? OR r.contact_person LIKE ? OR r.email LIKE ?)';
       countParams.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
 
@@ -875,53 +892,45 @@ app.get('/api/admin/requests', async (req, res) => {
     const { page = 1, limit = 10, status, search } = req.query;
     const offset = (page - 1) * limit;
 
-    let query = `SELECT cr.request_id, cr.institution_id as community_id, 
-                 i.name as community_name, cr.date_requested, cr.status,
-                 cr.items_total, cr.items_allocated, cr.queue_position,
-                 cr.approval_date, cr.completion_date,
-                 ROUND((cr.items_allocated / cr.items_total) * 100) as fulfillment_progress
-                 FROM COMMUNITY_REQUESTS cr
-                 JOIN INSTITUTIONS i ON cr.institution_id = i.institution_id
+    let query = `SELECT ir.request_id, ir.recipient_id as community_id, 
+                 r.org_name as community_name, ir.request_date as date_requested, ir.request_status as status,
+                 ir.quantity_requested as items_total, i.item_name, i.category,
+                 i.estimated_value
+                 FROM ITEM_REQUESTS ir
+                 JOIN RECIPIENTS r ON ir.recipient_id = r.recipient_id
+                 JOIN ITEMS i ON ir.item_id = i.item_id
                  WHERE 1=1`;
     
     const params = [];
 
     if (status) {
-      query += ' AND cr.status = ?';
+      query += ' AND ir.request_status = ?';
       params.push(status);
     }
 
     if (search) {
-      query += ' AND (i.name LIKE ? OR cr.request_id LIKE ?)';
+      query += ' AND (r.org_name LIKE ? OR i.item_name LIKE ?)';
       params.push(`%${search}%`, `%${search}%`);
     }
 
-    query += ' ORDER BY cr.queue_position ASC, cr.date_requested DESC LIMIT ? OFFSET ?';
+    query += ' ORDER BY ir.request_date DESC LIMIT ? OFFSET ?';
     params.push(parseInt(limit), parseInt(offset));
 
     const connection = await pool.getConnection();
     const [requests] = await connection.execute(query, params);
-    
-    // Get items requested for each request
-    for (let request of requests) {
-      const [items] = await connection.execute(
-        `SELECT category, quantity_requested as quantity 
-         FROM REQUEST_ITEMS WHERE community_request_id = ?`,
-        [request.request_id]
-      );
-      request.items_requested = items;
-    }
 
     // Get total count
-    let countQuery = 'SELECT COUNT(*) as total FROM COMMUNITY_REQUESTS cr JOIN INSTITUTIONS i ON cr.institution_id = i.institution_id WHERE 1=1';
+    let countQuery = `SELECT COUNT(*) as total FROM ITEM_REQUESTS ir 
+                      JOIN RECIPIENTS r ON ir.recipient_id = r.recipient_id
+                      JOIN ITEMS i ON ir.item_id = i.item_id WHERE 1=1`;
     const countParams = [];
     
     if (status) {
-      countQuery += ' AND cr.status = ?';
+      countQuery += ' AND ir.request_status = ?';
       countParams.push(status);
     }
     if (search) {
-      countQuery += ' AND (i.name LIKE ? OR cr.request_id LIKE ?)';
+      countQuery += ' AND (r.org_name LIKE ? OR i.item_name LIKE ?)';
       countParams.push(`%${search}%`, `%${search}%`);
     }
 
@@ -947,36 +956,39 @@ app.get('/api/admin/requests', async (req, res) => {
 app.put('/api/admin/requests/:requestId', async (req, res) => {
   try {
     const { requestId } = req.params;
-    const { status, admin_id, rejection_reason, admin_notes } = req.body;
+    const { status } = req.body;
 
-    if (!status || !['approved', 'rejected', 'in_fulfillment', 'completed'].includes(status)) {
+    if (!status || !['approved', 'rejected', 'fulfilled'].includes(status)) {
       return res.status(400).json({ message: 'Invalid status' });
     }
 
     const connection = await pool.getConnection();
 
-    let query = 'UPDATE COMMUNITY_REQUESTS SET status = ?';
-    const params = [status];
+    await connection.execute(
+      'UPDATE ITEM_REQUESTS SET request_status = ? WHERE request_id = ?',
+      [status, requestId]
+    );
 
+    // If approved, create distribution and update item
     if (status === 'approved') {
-      query += ', approval_date = NOW(), approved_by = ?';
-      params.push(admin_id);
+      const [request] = await connection.execute(
+        'SELECT item_id, recipient_id, quantity_requested, request_reason FROM ITEM_REQUESTS WHERE request_id = ?',
+        [requestId]
+      );
+
+      if (request.length > 0) {
+        await connection.execute(
+          'INSERT INTO DISTRIBUTIONS (item_id, recipient_id, quantity, notes) VALUES (?, ?, ?, ?)',
+          [request[0].item_id, request[0].recipient_id, request[0].quantity_requested, `Approved: ${request[0].request_reason || 'Request approved'}`]
+        );
+
+        await connection.execute(
+          'UPDATE ITEMS SET availability_status = "distributed" WHERE item_id = ?',
+          [request[0].item_id]
+        );
+      }
     }
 
-    if (status === 'rejected' && rejection_reason) {
-      query += ', rejection_reason = ?';
-      params.push(rejection_reason);
-    }
-
-    if (admin_notes) {
-      query += ', admin_notes = ?';
-      params.push(admin_notes);
-    }
-
-    query += ' WHERE request_id = ?';
-    params.push(requestId);
-
-    await connection.execute(query, params);
     connection.release();
 
     return res.json({ message: 'Request updated successfully' });
@@ -1070,45 +1082,39 @@ app.get('/api/admin/items', async (req, res) => {
 // Get all distributions
 app.get('/api/admin/distributions', async (req, res) => {
   try {
-    const { page = 1, limit = 10, status, search } = req.query;
+    const { page = 1, limit = 10, search } = req.query;
     const offset = (page - 1) * limit;
 
-    let query = `SELECT d.distribution_id, cr.request_id, cr.institution_id as community_id,
-                 i.name as community_name, d.distribution_date, d.distribution_method as delivery_method,
-                 d.status, COUNT(d.item_id) as items_count
+    let query = `SELECT d.distribution_id, d.item_id, d.recipient_id as community_id,
+                 r.org_name as community_name, d.distribution_date, d.quantity as items_count,
+                 d.satisfaction_rating, d.recipient_feedback, d.notes,
+                 i.item_name, i.category
                  FROM DISTRIBUTIONS d
-                 JOIN COMMUNITY_REQUESTS cr ON d.community_request_id = cr.request_id
-                 JOIN INSTITUTIONS i ON cr.institution_id = i.institution_id
+                 JOIN RECIPIENTS r ON d.recipient_id = r.recipient_id
+                 JOIN ITEMS i ON d.item_id = i.item_id
                  WHERE 1=1`;
     
     const params = [];
 
-    if (status) {
-      query += ' AND d.status = ?';
-      params.push(status);
-    }
-
     if (search) {
-      query += ' AND (i.name LIKE ? OR d.distribution_id LIKE ?)';
+      query += ' AND (r.org_name LIKE ? OR i.item_name LIKE ?)';
       params.push(`%${search}%`, `%${search}%`);
     }
 
-    query += ' GROUP BY d.distribution_id ORDER BY d.distribution_date DESC LIMIT ? OFFSET ?';
+    query += ' ORDER BY d.distribution_date DESC LIMIT ? OFFSET ?';
     params.push(parseInt(limit), parseInt(offset));
 
     const connection = await pool.getConnection();
     const [distributions] = await connection.execute(query, params);
     
     // Get total count
-    let countQuery = 'SELECT COUNT(DISTINCT d.distribution_id) as total FROM DISTRIBUTIONS d JOIN COMMUNITY_REQUESTS cr ON d.community_request_id = cr.request_id JOIN INSTITUTIONS i ON cr.institution_id = i.institution_id WHERE 1=1';
+    let countQuery = `SELECT COUNT(*) as total FROM DISTRIBUTIONS d 
+                      JOIN RECIPIENTS r ON d.recipient_id = r.recipient_id 
+                      JOIN ITEMS i ON d.item_id = i.item_id WHERE 1=1`;
     const countParams = [];
     
-    if (status) {
-      countQuery += ' AND d.status = ?';
-      countParams.push(status);
-    }
     if (search) {
-      countQuery += ' AND (i.name LIKE ? OR d.distribution_id LIKE ?)';
+      countQuery += ' AND (r.org_name LIKE ? OR i.item_name LIKE ?)';
       countParams.push(`%${search}%`, `%${search}%`);
     }
 
@@ -1136,8 +1142,8 @@ app.get('/api/admin/recipients', async (req, res) => {
     const { page = 1, limit = 10, status = 'pending', search } = req.query;
     const offset = (page - 1) * limit;
 
-    let query = `SELECT r.recipient_id, r.full_name, r.age, r.gender, r.guardian_name,
-                 r.guardian_contact, r.address, r.needs_description, r.application_letter,
+    let query = `SELECT r.recipient_id, r.org_name as full_name, r.org_type, r.contact_person as guardian_name,
+                 r.phone as guardian_contact, r.email, r.address, r.application_letter as needs_description,
                  r.verification_status, r.recipient_code, r.registration_date
                  FROM RECIPIENTS r
                  WHERE 1=1`;
@@ -1150,7 +1156,7 @@ app.get('/api/admin/recipients', async (req, res) => {
     }
 
     if (search) {
-      query += ' AND (r.full_name LIKE ? OR r.guardian_contact LIKE ? OR r.guardian_name LIKE ?)';
+      query += ' AND (r.org_name LIKE ? OR r.phone LIKE ? OR r.contact_person LIKE ?)';
       params.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
 
@@ -1169,7 +1175,7 @@ app.get('/api/admin/recipients', async (req, res) => {
       countParams.push(status);
     }
     if (search) {
-      countQuery += ' AND (r.full_name LIKE ? OR r.guardian_contact LIKE ? OR r.guardian_name LIKE ?)';
+      countQuery += ' AND (r.org_name LIKE ? OR r.phone LIKE ? OR r.contact_person LIKE ?)';
       countParams.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
 
@@ -1205,7 +1211,7 @@ app.post('/api/admin/recipients/:id/approve', async (req, res) => {
     
     // Check if recipient exists and is pending
     const [recipient] = await connection.execute(
-      'SELECT recipient_id, full_name, guardian_contact, verification_status FROM RECIPIENTS WHERE recipient_id = ?',
+      'SELECT recipient_id, org_name, phone, verification_status FROM RECIPIENTS WHERE recipient_id = ?',
       [id]
     );
 
@@ -1221,9 +1227,6 @@ app.post('/api/admin/recipients/:id/approve', async (req, res) => {
 
     // Generate recipient code (RCP + 6 digits)
     const recipientCode = 'RCP' + Math.floor(100000 + Math.random() * 900000);
-    
-    // Generate random password (8 characters: letters + numbers)
-    const password = Math.random().toString(36).slice(-8).toUpperCase();
 
     // Update recipient with approval and save the recipient code
     await connection.execute(
@@ -1241,9 +1244,8 @@ app.post('/api/admin/recipients/:id/approve', async (req, res) => {
       message: 'Recipient approved successfully',
       credentials: {
         recipientCode,
-        password,
-        fullName: recipient[0].full_name,
-        contact: recipient[0].guardian_contact
+        fullName: recipient[0].org_name,
+        contact: recipient[0].phone
       }
     });
   } catch (error) {
@@ -1266,7 +1268,7 @@ app.post('/api/admin/recipients/:id/reject', async (req, res) => {
     
     // Check if recipient exists and is pending
     const [recipient] = await connection.execute(
-      'SELECT recipient_id, full_name, verification_status FROM RECIPIENTS WHERE recipient_id = ?',
+      'SELECT recipient_id, org_name, verification_status FROM RECIPIENTS WHERE recipient_id = ?',
       [id]
     );
 
@@ -1280,8 +1282,7 @@ app.post('/api/admin/recipients/:id/reject', async (req, res) => {
       return res.status(400).json({ message: 'Recipient is not in pending status' });
     }
 
-    // Update recipient with rejection (just change verification status for now)
-    // Note: rejection_reason field doesn't exist in current schema
+    // Update recipient with rejection
     await connection.execute(
       `UPDATE RECIPIENTS 
        SET verification_status = 'rejected'
@@ -1307,7 +1308,7 @@ app.get('/api/admin/:adminId/profile', async (req, res) => {
     const { adminId } = req.params;
     const connection = await pool.getConnection();
     const [profile] = await connection.execute(
-      'SELECT admin_id, full_name, email, role, created_at, last_login FROM ADMINS WHERE admin_id = ?',
+      'SELECT admin_id, full_name, email, status, created_at, last_login FROM ADMINS WHERE admin_id = ?',
       [adminId]
     );
     connection.release();
@@ -1369,7 +1370,119 @@ app.put('/api/admin/:adminId/profile', async (req, res) => {
   }
 });
 
-const PORT = process.env.BACKEND_PORT || 3000;
+// ============================================================================
+// DONOR PORTAL - Donate Item
+// ============================================================================
+app.post('/api/donor/:donorId/donate', async (req, res) => {
+  try {
+    const { donorId } = req.params;
+    const { item_name, category, condition_status, description, estimated_value, quantity } = req.body;
+
+    if (!item_name || !category || !condition_status) {
+      return res.status(400).json({ message: 'Item name, category, and condition are required' });
+    }
+
+    const connection = await pool.getConnection();
+
+    const [result] = await connection.execute(
+      `INSERT INTO ITEMS (item_name, category, condition_status, description, estimated_value, quantity, donor_id, availability_status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'available')`,
+      [item_name, category, condition_status, description || null, estimated_value || 0, quantity || 1, donorId]
+    );
+
+    connection.release();
+
+    return res.status(201).json({
+      message: 'Item donated successfully',
+      item_id: result.insertId
+    });
+  } catch (error) {
+    console.error('Error donating item:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get donor profile
+app.get('/api/donor/:donorId/profile', async (req, res) => {
+  try {
+    const { donorId } = req.params;
+    const connection = await pool.getConnection();
+    const [profile] = await connection.execute(
+      'SELECT donor_id, full_name, email, phone, institution, registration_date, status FROM DONORS WHERE donor_id = ?',
+      [donorId]
+    );
+    connection.release();
+    
+    if (profile.length === 0) {
+      return res.status(404).json({ message: 'Donor not found' });
+    }
+    
+    return res.json(profile[0]);
+  } catch (error) {
+    console.error('Error fetching donor profile:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Update donor profile
+app.put('/api/donor/:donorId/profile', async (req, res) => {
+  try {
+    const { donorId } = req.params;
+    const { full_name, phone, institution } = req.body;
+
+    const connection = await pool.getConnection();
+    await connection.execute(
+      'UPDATE DONORS SET full_name = ?, phone = ?, institution = ? WHERE donor_id = ?',
+      [full_name, phone, institution, donorId]
+    );
+    connection.release();
+    return res.json({ message: 'Profile updated successfully' });
+  } catch (error) {
+    console.error('Error updating donor profile:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get donor dashboard stats
+app.get('/api/donor/:donorId/dashboard', async (req, res) => {
+  try {
+    const { donorId } = req.params;
+    const connection = await pool.getConnection();
+
+    // Total items donated
+    const [totalItems] = await connection.execute(
+      'SELECT COUNT(*) as count FROM ITEMS WHERE donor_id = ?',
+      [donorId]
+    );
+
+    // Items distributed (helped someone)
+    const [distributedItems] = await connection.execute(
+      'SELECT COUNT(*) as count FROM ITEMS WHERE donor_id = ? AND availability_status = "distributed"',
+      [donorId]
+    );
+
+    // Total value donated
+    const [totalValue] = await connection.execute(
+      'SELECT COALESCE(SUM(estimated_value), 0) as total FROM ITEMS WHERE donor_id = ?',
+      [donorId]
+    );
+
+    connection.release();
+
+    return res.json({
+      stats: {
+        totalDonations: totalItems[0].count,
+        itemsDistributed: distributedItems[0].count,
+        totalValue: totalValue[0].total
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching donor dashboard:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+const PORT = process.env.BACKEND_PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Backend running on http://localhost:${PORT}`);
 });
