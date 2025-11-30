@@ -9,7 +9,6 @@ where node >nul 2>nul
 if %errorlevel% neq 0 (
     echo ERROR: Node.js is not installed!
     echo Please install Node.js from https://nodejs.org/
-    pause
     exit /b 1
 )
 
@@ -48,7 +47,6 @@ echo [3/5] Installing Node.js dependencies...
 call npm install
 if %errorlevel% neq 0 (
     echo ERROR: Failed to install dependencies!
-    pause
     exit /b 1
 )
 echo Dependencies installed successfully.
@@ -99,4 +97,3 @@ echo 2. Ensure MySQL server is running
 echo 3. Run "start.bat" to start the application
 echo ============================================
 echo.
-pause

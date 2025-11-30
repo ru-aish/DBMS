@@ -1,4 +1,36 @@
-import { login as apiLogin, getDonationHistory } from './api.js';
+// API Functions (inline to avoid module issues)
+const API_BASE_URL = 'http://localhost:3000/api';
+
+const apiLogin = async (email, password) => {
+  const response = await fetch(`${API_BASE_URL}/login`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      identifier: email,
+      password: password
+    })
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || 'Login failed');
+  }
+
+  return response.json();
+};
+
+const getDonationHistory = async (donorId) => {
+  const response = await fetch(`${API_BASE_URL}/donor/${donorId}/donations`);
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || 'Failed to fetch donation history');
+  }
+
+  return response.json();
+};
 
 // React Context for Global State Management
 const { useState, useContext, createContext, useEffect } = React;
@@ -222,7 +254,7 @@ const RegisterForm = ({ onSuccess }) => {
     setErrors(newErrors);
     if (Object.keys(newErrors).length === 0) {
       try {
-        const response = await fetch('http://localhost:5000/api/register', {
+        const response = await fetch(`${API_BASE_URL}/register`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'

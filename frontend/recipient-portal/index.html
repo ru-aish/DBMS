@@ -4,16 +4,59 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Recipient Portal</title>
-  <!-- Reference style.css relatively -->
   <link rel="stylesheet" href="./style.css" />
-  <!-- React and Babel -->
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <!-- React Development (better error messages) -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
 <body>
-  <div id="root"></div>
-  <!-- Reference app.js relatively -->
-  <script type="text/babel" src="./app.js"></script>
+  <div id="root">
+    <div style="display: flex; justify-content: center; align-items: center; height: 100vh; font-family: system-ui, -apple-system, sans-serif;">
+      <div style="text-align: center;">
+        <div style="border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 16px;"></div>
+        <p style="color: #666;">Loading Recipient Portal...</p>
+      </div>
+    </div>
+    <style>
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+    </style>
+  </div>
+  
+  <script>
+    // Fetch and transform the app.js file manually
+    // This avoids the Babel standalone issue with external script src
+    fetch('./app.js')
+      .then(response => {
+        if (!response.ok) throw new Error('Failed to load app.js: ' + response.status);
+        return response.text();
+      })
+      .then(code => {
+        // Transform JSX to JavaScript using Babel
+        const transformed = Babel.transform(code, {
+          presets: ['react']
+        }).code;
+        
+        // Execute the transformed code
+        const script = document.createElement('script');
+        script.textContent = transformed;
+        document.body.appendChild(script);
+      })
+      .catch(error => {
+        console.error('Error loading app:', error);
+        document.getElementById('root').innerHTML = `
+          <div style="display: flex; justify-content: center; align-items: center; height: 100vh; font-family: system-ui;">
+            <div style="text-align: center; color: #dc3545;">
+              <h2>Error Loading Application</h2>
+              <p>${error.message}</p>
+              <p style="color: #666; font-size: 14px;">Check the browser console for details.</p>
+            </div>
+          </div>
+        `;
+      });
+  </script>
 </body>
 </html>

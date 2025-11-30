@@ -49,7 +49,7 @@ const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      const response = await fetch('http://localhost:5000/api/recipient/login', {
+      const response = await fetch('http://localhost:3000/api/recipient/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ identifier: email })
@@ -78,7 +78,7 @@ const AuthProvider = ({ children }) => {
 
   const register = async (userData) => {
     try {
-      const response = await fetch('http://localhost:5000/api/recipient/register', {
+      const response = await fetch('http://localhost:3000/api/recipient/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -181,8 +181,8 @@ function LandingPage({ setCurrentPage, toggleTheme, theme }) {
     const fetchData = async () => {
       try {
         const [statsResponse, testimonialsResponse] = await Promise.all([
-          fetch('http://localhost:5000/api/public/stats'),
-          fetch('http://localhost:5000/api/public/testimonials')
+          fetch('http://localhost:3000/api/public/stats'),
+          fetch('http://localhost:3000/api/public/testimonials')
         ]);
 
         if (statsResponse.ok) {
@@ -445,8 +445,8 @@ function Dashboard() {
     const fetchDashboard = async () => {
       try {
         const [statsResponse, requestsResponse] = await Promise.all([
-          fetch(`http://localhost:5000/api/recipient/${user.id}/dashboard`),
-          fetch(`http://localhost:5000/api/recipient/${user.id}/requests`)
+          fetch(`http://localhost:3000/api/recipient/${user.id}/dashboard`),
+          fetch(`http://localhost:3000/api/recipient/${user.id}/requests`)
         ]);
 
         if (statsResponse.ok) {
@@ -577,7 +577,7 @@ function BrowseItems() {
   useEffect(() => {
     const fetchItems = async () => {
       try {
-        const response = await fetch('http://localhost:5000/api/items/available');
+        const response = await fetch('http://localhost:3000/api/items/available');
         if (response.ok) {
           const data = await response.json();
           setItems(data.items || []);
@@ -605,7 +605,7 @@ function BrowseItems() {
 
   const handleSubmitRequest = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/recipient/request', {
+      const response = await fetch('http://localhost:3000/api/recipient/request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -747,7 +747,7 @@ function MyRequests() {
 
   const fetchRequests = async () => {
     try {
-      const response = await fetch(`http://localhost:5000/api/recipient/${user.id}/requests`);
+      const response = await fetch(`http://localhost:3000/api/recipient/${user.id}/requests`);
       if (response.ok) {
         const data = await response.json();
         setRequests(data.requests || []);
@@ -765,7 +765,7 @@ function MyRequests() {
 
   const handleCancelRequest = async (requestId) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/recipient/request/${requestId}`, {
+      const response = await fetch(`http://localhost:3000/api/recipient/request/${requestId}`, {
         method: 'DELETE'
       });
       if (response.ok) {
@@ -860,7 +860,7 @@ function ReceivedItems() {
 
   const fetchDistributions = async () => {
     try {
-      const response = await fetch(`http://localhost:5000/api/recipient/${user.id}/distributions`);
+      const response = await fetch(`http://localhost:3000/api/recipient/${user.id}/distributions`);
       if (response.ok) {
         const data = await response.json();
         setDistributions(data.distributions || []);
@@ -879,7 +879,7 @@ function ReceivedItems() {
   const handleSubmitRating = async () => {
     if (ratingItem) {
       try {
-        const response = await fetch(`http://localhost:5000/api/recipient/distribution/${ratingItem.distribution_id}/rate`, {
+        const response = await fetch(`http://localhost:3000/api/recipient/distribution/${ratingItem.distribution_id}/rate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ rating, feedback })
@@ -1018,7 +1018,7 @@ function ProfileSettings() {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const response = await fetch(`http://localhost:5000/api/recipient/${user.id}/profile`);
+        const response = await fetch(`http://localhost:3000/api/recipient/${user.id}/profile`);
         if (response.ok) {
           const data = await response.json();
           setProfile(data);
@@ -1039,7 +1039,7 @@ function ProfileSettings() {
 
   const handleSave = async () => {
     try {
-      const response = await fetch(`http://localhost:5000/api/recipient/${user.id}/profile`, {
+      const response = await fetch(`http://localhost:3000/api/recipient/${user.id}/profile`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -620,7 +620,7 @@ function Dashboard() {
   const [timeReports, setTimeReports] = useState(recentTimeReports);
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/admin/dashboard')
+    fetch('http://localhost:3000/api/admin/dashboard')
       .then(response => response.json())
       .then(data => {
         setStats(data.stats);
@@ -886,7 +886,7 @@ function DonorsManagement() {
   const itemsPerPage = 5;
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/admin/donors?page=1&limit=100')
+    fetch('http://localhost:3000/api/admin/donors?page=1&limit=100')
       .then(response => response.json())
       .then(data => {
         setDonors(data.donors || []);
@@ -1066,7 +1066,7 @@ function CommunitiesManagement() {
   const itemsPerPage = 5;
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/admin/communities')
+    fetch('http://localhost:3000/api/admin/communities')
       .then(response => response.json())
       .then(data => {
         setCommunities(data.communities || []);
@@ -1247,7 +1247,7 @@ function RequestsManagement() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
   useEffect(() => {
-    fetch('http://localhost:5000/api/admin/requests')
+    fetch('http://localhost:3000/api/admin/requests')
       .then(response => response.json())
       .then(data => {
         setRequests(data.requests || []);
@@ -1424,7 +1424,7 @@ function ItemsManagement() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
   useEffect(() => {
-    fetch('http://localhost:5000/api/admin/items?page=1&limit=100')
+    fetch('http://localhost:3000/api/admin/items?page=1&limit=100')
       .then(response => response.json())
       .then(data => {
         setItems(data.items || []);
@@ -1630,7 +1630,7 @@ function DistributionsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
   useEffect(() => {
-    fetch('http://localhost:5000/api/admin/distributions')
+    fetch('http://localhost:3000/api/admin/distributions')
       .then(response => response.json())
       .then(data => {
         setDistributions(data.distributions || []);
@@ -1791,11 +1791,11 @@ function ReportsAnalytics() {
   useEffect(() => {
     // Fetch all necessary data
     Promise.all([
-      fetch('http://localhost:5000/api/admin/items?page=1&limit=1000').then(r => r.json()),
-      fetch('http://localhost:5000/api/admin/requests').then(r => r.json()),
-      fetch('http://localhost:5000/api/admin/donors?page=1&limit=100').then(r => r.json()),
-      fetch('http://localhost:5000/api/admin/communities').then(r => r.json()),
-      fetch('http://localhost:5000/api/admin/dashboard').then(r => r.json())
+      fetch('http://localhost:3000/api/admin/items?page=1&limit=1000').then(r => r.json()),
+      fetch('http://localhost:3000/api/admin/requests').then(r => r.json()),
+      fetch('http://localhost:3000/api/admin/donors?page=1&limit=100').then(r => r.json()),
+      fetch('http://localhost:3000/api/admin/communities').then(r => r.json()),
+      fetch('http://localhost:3000/api/admin/dashboard').then(r => r.json())
     ])
     .then(([itemsData, requestsData, donorsData, communitiesData, dashboardData]) => {
       setItems(itemsData.items || []);
