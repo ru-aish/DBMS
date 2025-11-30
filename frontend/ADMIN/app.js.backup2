@@ -612,45 +612,33 @@ function TopNav({ isSidebarOpen, setIsSidebarOpen }) {
 
 // Dashboard Page
 function Dashboard() {
-  const [stats, setStats] = useState({ total_active_donors: 0, total_communities: 0, total_items_in_stock: 0, pending_requests: 0 });
+  const [stats, setStats] = useState(dashboardStats);
   const [recentDonors, setRecentDonors] = useState([]);
-  const [completedRequestsData, setCompletedRequestsData] = useState([]);
-  const [pendingRequestsData, setPendingRequestsData] = useState([]);
+  const [completedRequestsData, setCompletedRequestsData] = useState(completedRequests);
+  const [pendingRequestsData, setPendingRequestsData] = useState(pendingQueue);
   const [recentItems, setRecentItems] = useState([]);
-  const [timeReports, setTimeReports] = useState({ last_7_days: { items_donated: 0, items_distributed: 0, requests_fulfilled: 0, requests_pending: 0 }, last_30_days: { items_donated: 0, items_distributed: 0, requests_fulfilled: 0, requests_pending: 0 }, last_90_days: { items_donated: 0, items_distributed: 0, requests_fulfilled: 0, requests_pending: 0 } });
-  const [loading, setLoading] = useState(true);
+  const [timeReports, setTimeReports] = useState(recentTimeReports);
 
-  const fetchDashboard = () => {
+  useEffect(() => {
     fetch('http://localhost:5000/api/admin/dashboard')
       .then(response => response.json())
       .then(data => {
-        if (data.stats) setStats(data.stats);
-        if (data.recentDonors) setRecentDonors(data.recentDonors);
-        if (data.completedRequests) setCompletedRequestsData(data.completedRequests);
-        if (data.pendingRequests) setPendingRequestsData(data.pendingRequests);
-        if (data.recentItems) setRecentItems(data.recentItems);
-        if (data.timeReports) setTimeReports(data.timeReports);
-        setLoading(false);
+        setStats(data.stats);
+        setRecentDonors(data.recentDonors);
+        setCompletedRequestsData(data.completedRequests);
+        setPendingRequestsData(data.pendingRequests);
+        setRecentItems(data.recentItems);
+        setTimeReports(data.timeReports);
       })
-      .catch(error => {
-        console.error('Error fetching dashboard data:', error);
-        setLoading(false);
-      });
-  };
-
-  useEffect(() => {
-    fetchDashboard();
-    // Auto-refresh every 30 seconds
-    const interval = setInterval(fetchDashboard, 30000);
-    return () => clearInterval(interval);
+      .catch(error => console.error('Error fetching dashboard data:', error));
   }, []);
 
   useEffect(() => {
-    // Create items by category chart using real data
+    // Create items by category chart
     const ctx = document.getElementById('itemsCategoryChart');
-    if (ctx && recentItems.length > 0) {
+    if (ctx) {
       const categoryCounts = {};
-      recentItems.forEach(item => {
+      sampleItems.forEach(item => {
         categoryCounts[item.category] = (categoryCounts[item.category] || 0) + 1;
       });
 
@@ -676,7 +664,7 @@ function Dashboard() {
 
       return () => chart.destroy();
     }
-  }, [recentItems]);
+  }, []);
 
   return (
     <div>
@@ -731,25 +719,25 @@ function Dashboard() {
           <div className="card-body">
             <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: 'var(--color-text)' }}>Recent Completed Requests</h3>
             <div style={{ marginBottom: '20px' }}>
-              {completedRequestsData && completedRequestsData.length > 0 ? completedRequestsData.map(req => (
+              {completedRequestsData.map(req => (
                 <div key={req.request_id} style={{ padding: '12px', backgroundColor: 'var(--color-bg-3)', borderRadius: '8px', marginBottom: '8px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
                     <div>
                       <div style={{ fontWeight: '600', fontSize: '14px' }}>{req.request_id}</div>
                       <div style={{ fontSize: '13px', color: '#6b7280' }}>{req.community_name}</div>
-                      <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>Items: {req.items_count} | Completed: {req.completion_date ? new Date(req.completion_date).toLocaleDateString() : 'N/A'}</div>
+                      <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>Items: {req.items_count} | Completed: {req.completion_date}</div>
                     </div>
                     <span className="status-badge completed" style={{ fontSize: '11px' }}>{req.status}</span>
                   </div>
                 </div>
-              )) : <p style={{ color: '#6b7280', fontSize: '13px' }}>No completed requests yet</p>}
+              ))}
             </div>
             <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: 'var(--color-text)' }}>Last 5 Items Donated</h3>
-            {recentItems && recentItems.length > 0 ? recentItems.slice(0, 5).map(item => (
+            {recentItems.slice(0, 5).map(item => (
               <div key={item.item_id} style={{ fontSize: '13px', padding: '6px 0', borderBottom: '1px solid #e5e7eb' }}>
                 {item.item_name} - {item.donor_name}
               </div>
-            )) : <p style={{ color: '#6b7280', fontSize: '13px' }}>No items donated yet</p>}
+            ))}
           </div>
         </div>
 
@@ -761,28 +749,28 @@ function Dashboard() {
             <div style={{ marginBottom: '16px', padding: '12px', backgroundColor: 'var(--color-bg-1)', borderRadius: '8px' }}>
               <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px' }}>Last 7 Days</h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px' }}>
-                <div>Items Donated: <strong>{timeReports?.last_7_days?.items_donated || 0}</strong></div>
-                <div>Items Distributed: <strong>{timeReports?.last_7_days?.items_distributed || 0}</strong></div>
-                <div>Requests Fulfilled: <strong>{timeReports?.last_7_days?.requests_fulfilled || 0}</strong></div>
-                <div>Requests Pending: <strong>{timeReports?.last_7_days?.requests_pending || 0}</strong></div>
+                <div>Items Donated: <strong>{timeReports.last_7_days.items_donated}</strong></div>
+                <div>Items Distributed: <strong>{timeReports.last_7_days.items_distributed}</strong></div>
+                <div>Requests Fulfilled: <strong>{timeReports.last_7_days.requests_fulfilled}</strong></div>
+                <div>Requests Pending: <strong>{timeReports.last_7_days.requests_pending}</strong></div>
               </div>
             </div>
             <div style={{ marginBottom: '16px', padding: '12px', backgroundColor: 'var(--color-bg-2)', borderRadius: '8px' }}>
               <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px' }}>Last 30 Days</h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px' }}>
-                <div>Items Donated: <strong>{timeReports?.last_30_days?.items_donated || 0}</strong></div>
-                <div>Items Distributed: <strong>{timeReports?.last_30_days?.items_distributed || 0}</strong></div>
-                <div>Requests Fulfilled: <strong>{timeReports?.last_30_days?.requests_fulfilled || 0}</strong></div>
-                <div>Requests Pending: <strong>{timeReports?.last_30_days?.requests_pending || 0}</strong></div>
+                <div>Items Donated: <strong>{timeReports.last_30_days.items_donated}</strong></div>
+                <div>Items Distributed: <strong>{timeReports.last_30_days.items_distributed}</strong></div>
+                <div>Requests Fulfilled: <strong>{timeReports.last_30_days.requests_fulfilled}</strong></div>
+                <div>Requests Pending: <strong>{timeReports.last_30_days.requests_pending}</strong></div>
               </div>
             </div>
             <div style={{ padding: '12px', backgroundColor: 'var(--color-bg-3)', borderRadius: '8px' }}>
               <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px' }}>Last 90 Days</h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px' }}>
-                <div>Items Donated: <strong>{timeReports?.last_90_days?.items_donated || 0}</strong></div>
-                <div>Items Distributed: <strong>{timeReports?.last_90_days?.items_distributed || 0}</strong></div>
-                <div>Requests Fulfilled: <strong>{timeReports?.last_90_days?.requests_fulfilled || 0}</strong></div>
-                <div>Requests Pending: <strong>{timeReports?.last_90_days?.requests_pending || 0}</strong></div>
+                <div>Items Donated: <strong>{timeReports.last_90_days.items_donated}</strong></div>
+                <div>Items Distributed: <strong>{timeReports.last_90_days.items_distributed}</strong></div>
+                <div>Requests Fulfilled: <strong>{timeReports.last_90_days.requests_fulfilled}</strong></div>
+                <div>Requests Pending: <strong>{timeReports.last_90_days.requests_pending}</strong></div>
               </div>
             </div>
           </div>
@@ -809,7 +797,7 @@ function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {pendingRequestsData && pendingRequestsData.length > 0 ? pendingRequestsData.map(req => (
+                {pendingRequestsData.map(req => (
                   <tr key={req.request_id}>
                     <td>
                       <span style={{ 
@@ -843,13 +831,7 @@ function Dashboard() {
                       <span className="status-badge pending">In Queue</span>
                     </td>
                   </tr>
-                )) : (
-                  <tr>
-                    <td colSpan="7" style={{ textAlign: 'center', padding: '24px', color: '#6b7280' }}>
-                      No pending requests in queue
-                    </td>
-                  </tr>
-                )}
+                ))}
               </tbody>
             </table>
           </div>
@@ -872,23 +854,23 @@ function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              {recentDonors.length > 0 ? recentDonors.map(donor => (
-                <tr key={donor.donor_id}>
-                  <td>{donor.name}</td>
-                  <td>{donor.institution || 'N/A'}</td>
-                  <td>{donor.total_items_donated}</td>
-                  <td>{donor.last_donation_date ? new Date(donor.last_donation_date).toLocaleDateString() : 'N/A'}</td>
-                  <td>
-                    <span className={`status-badge ${donor.status === 'active' ? 'approved' : 'pending'}`}>
-                      {donor.status ? donor.status.charAt(0).toUpperCase() + donor.status.slice(1) : 'Active'}
-                    </span>
-                  </td>
-                </tr>
-              )) : (
+              {recentDonors.length > 0 ? (
+                recentDonors.slice(0, 5).map(donor => (
+                  <tr key={donor.donor_id}>
+                    <td>{donor.name}</td>
+                    <td>{donor.institution}</td>
+                    <td>{donor.total_items_donated}</td>
+                    <td>{donor.last_donation_date}</td>
+                    <td>
+                      <span className={`status-badge ${donor.status === 'Active' ? 'approved' : 'pending'}`}>
+                        {donor.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              ) : (
                 <tr>
-                  <td colSpan="5" style={{ textAlign: 'center', padding: '24px', color: '#6b7280' }}>
-                    No donors yet
-                  </td>
+                  <td colSpan="5" style={{ textAlign: 'center', padding: '20px', color: '#6b7280' }}>No recent donors</td>
                 </tr>
               )}
             </tbody>
@@ -1078,167 +1060,21 @@ function DonorsManagement() {
   );
 }
 
-// Communities Management Page - Shows ONLY verified/registered recipients
+// Communities Management Page
 function CommunitiesManagement() {
-  const [recipients, setRecipients] = useState([]);
-  const [filteredRecipients, setFilteredRecipients] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
-
-  // Fetch only verified recipients
-  useEffect(() => {
-    fetch('http://localhost:5000/api/admin/recipients?status=verified&limit=100')
-      .then(response => response.json())
-      .then(data => {
-        setRecipients(data.recipients || []);
-        setFilteredRecipients(data.recipients || []);
-      })
-      .catch(error => console.error('Error fetching recipients:', error));
-  }, []);
-
-  // Filter recipients
-  useEffect(() => {
-    let filtered = recipients;
-    if (searchTerm) {
-      filtered = filtered.filter(r => 
-        r.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        r.recipient_code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        r.guardian_name?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-    setFilteredRecipients(filtered);
-    setCurrentPage(1);
-  }, [searchTerm, recipients]);
-
-  const totalPages = Math.ceil(filteredRecipients.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedRecipients = filteredRecipients.slice(startIndex, startIndex + itemsPerPage);
-
-  return (
-    <div>
-      <div className="page-header">
-        <h1 className="page-title">Registered Recipients</h1>
-        <p className="page-subtitle">All verified and registered community organizations that can request resources</p>
-      </div>
-
-      <div className="filters">
-        <div className="filter-group">
-          <label className="filter-label">Search</label>
-          <input 
-            type="text" 
-            className="filter-input" 
-            placeholder="Search by name, code, or contact..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-        <div className="filter-group" style={{ marginLeft: 'auto' }}>
-          <span style={{ 
-            backgroundColor: '#d1fae5', color: '#065f46',
-            padding: '8px 16px', borderRadius: '8px', fontSize: '14px', fontWeight: '600'
-          }}>
-            {recipients.length} Registered Recipients
-          </span>
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>Recipient Code</th>
-                <th>Organization Name</th>
-                <th>Contact Person</th>
-                <th>Phone</th>
-                <th>Address</th>
-                <th>Registered On</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedRecipients.length > 0 ? (
-                paginatedRecipients.map(recipient => (
-                  <tr key={recipient.recipient_id}>
-                    <td>
-                      <span style={{ fontFamily: 'monospace', fontWeight: '600', color: '#166534' }}>
-                        {recipient.recipient_code || 'N/A'}
-                      </span>
-                    </td>
-                    <td>{recipient.full_name}</td>
-                    <td>{recipient.guardian_name}</td>
-                    <td>{recipient.guardian_contact}</td>
-                    <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {recipient.address}
-                    </td>
-                    <td>{new Date(recipient.registration_date).toLocaleDateString()}</td>
-                    <td>
-                      <span className="status-badge approved">Verified</span>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan="7">
-                    <div className="empty-state">
-                      <div className="empty-state-icon">🏫</div>
-                      <div className="empty-state-text">No registered recipients found</div>
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        {filteredRecipients.length > 0 && (
-          <div className="pagination">
-            <div className="pagination-info">
-              Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, filteredRecipients.length)} of {filteredRecipients.length} recipients
-            </div>
-            <div className="pagination-controls">
-              <button 
-                className="pagination-btn" 
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-              >
-                Previous
-              </button>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                <button
-                  key={page}
-                  className={`pagination-btn ${currentPage === page ? 'active' : ''}`}
-                  onClick={() => setCurrentPage(page)}
-                >
-                  {page}
-                </button>
-              ))}
-              <button 
-                className="pagination-btn" 
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// Requests Management Page
-function RequestsManagement() {
-  const [requests, setRequests] = useState([]);
-  const [filteredRequests, setFilteredRequests] = useState([]);
+  const [communities, setCommunities] = useState([]);
+  const [filteredCommunities, setFilteredCommunities] = useState([]);
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [typeFilter, setTypeFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
-
-  // Pending recipient applications state
+  
+  // Pending applications state
   const [pendingRecipients, setPendingRecipients] = useState([]);
+  const [recipientStatusFilter, setRecipientStatusFilter] = useState('pending');
+  const [recipientSearchTerm, setRecipientSearchTerm] = useState('');
+  const [recipientPage, setRecipientPage] = useState(1);
   const [selectedRecipient, setSelectedRecipient] = useState(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [showApprovalModal, setShowApprovalModal] = useState(false);
@@ -1247,20 +1083,19 @@ function RequestsManagement() {
   const [approvalCredentials, setApprovalCredentials] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
 
-  // Fetch item requests
   useEffect(() => {
-    fetch('http://localhost:5000/api/admin/requests')
+    fetch('http://localhost:5000/api/admin/communities')
       .then(response => response.json())
       .then(data => {
-        setRequests(data.requests || []);
-        setFilteredRequests(data.requests || []);
+        setCommunities(data.communities || []);
+        setFilteredCommunities(data.communities || []);
       })
-      .catch(error => console.error('Error fetching requests:', error));
+      .catch(error => console.error('Error fetching communities:', error));
   }, []);
 
-  // Fetch pending recipient applications
-  const fetchPendingRecipients = () => {
-    fetch('http://localhost:5000/api/admin/recipients?status=pending&limit=50')
+  // Fetch pending recipients
+  const fetchRecipients = () => {
+    fetch(`http://localhost:5000/api/admin/recipients?status=${recipientStatusFilter}&search=${recipientSearchTerm}`)
       .then(response => response.json())
       .then(data => {
         setPendingRecipients(data.recipients || []);
@@ -1269,24 +1104,30 @@ function RequestsManagement() {
   };
 
   useEffect(() => {
-    fetchPendingRecipients();
-  }, []);
+    fetchRecipients();
+  }, [recipientStatusFilter, recipientSearchTerm]);
 
-  // Filter item requests
   useEffect(() => {
-    let filtered = requests;
+    let filtered = communities;
+
     if (statusFilter !== 'all') {
-      filtered = filtered.filter(r => r.status === statusFilter);
+      filtered = filtered.filter(c => c.verification_status === statusFilter);
     }
+
+    if (typeFilter !== 'all') {
+      filtered = filtered.filter(c => c.type === typeFilter);
+    }
+
     if (searchTerm) {
-      filtered = filtered.filter(r => 
-        r.request_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        r.community_name?.toLowerCase().includes(searchTerm.toLowerCase())
+      filtered = filtered.filter(c => 
+        c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.community_id.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
-    setFilteredRequests(filtered);
+
+    setFilteredCommunities(filtered);
     setCurrentPage(1);
-  }, [statusFilter, searchTerm, requests]);
+  }, [statusFilter, typeFilter, searchTerm, communities]);
 
   // Handle approve recipient
   const handleApprove = async (recipient) => {
@@ -1295,15 +1136,14 @@ function RequestsManagement() {
       const response = await fetch(`http://localhost:5000/api/admin/recipients/${recipient.recipient_id}/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ adminId: 1 })
+        body: JSON.stringify({ adminId: 1 }) // TODO: get actual admin ID from session
       });
       const data = await response.json();
       if (response.ok) {
         setApprovalCredentials(data.credentials);
         setSelectedRecipient(recipient);
-        setShowPreviewModal(false);
         setShowApprovalModal(true);
-        fetchPendingRecipients();
+        fetchRecipients();
       } else {
         alert(data.message || 'Error approving recipient');
       }
@@ -1331,10 +1171,9 @@ function RequestsManagement() {
       const data = await response.json();
       if (response.ok) {
         setShowRejectModal(false);
-        setShowPreviewModal(false);
         setRejectionReason('');
         setSelectedRecipient(null);
-        fetchPendingRecipients();
+        fetchRecipients();
         alert('Application rejected');
       } else {
         alert(data.message || 'Error rejecting application');
@@ -1347,87 +1186,181 @@ function RequestsManagement() {
     }
   };
 
-  const totalPages = Math.ceil(filteredRequests.length / itemsPerPage);
+  // Handle preview
+  const handlePreview = (recipient) => {
+    setSelectedRecipient(recipient);
+    setShowPreviewModal(true);
+  };
+
+  const totalPages = Math.ceil(filteredCommunities.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedRequests = filteredRequests.slice(startIndex, startIndex + itemsPerPage);
+  const paginatedCommunities = filteredCommunities.slice(startIndex, startIndex + itemsPerPage);
+  const types = [...new Set(communities.map(c => c.type))];
+
+  // Recipient pagination
+  const recipientItemsPerPage = 5;
+  const recipientTotalPages = Math.ceil(pendingRecipients.length / recipientItemsPerPage);
+  const recipientStartIndex = (recipientPage - 1) * recipientItemsPerPage;
+  const paginatedRecipients = pendingRecipients.slice(recipientStartIndex, recipientStartIndex + recipientItemsPerPage);
 
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title">Community Requests</h1>
-        <p className="page-subtitle">Manage recipient applications and resource requests</p>
+        <h1 className="page-title">Communities &amp; Recipients</h1>
+        <p className="page-subtitle">Manage institutions and recipient applications</p>
       </div>
 
       {/* Pending Recipient Applications Section */}
       <div className="card" style={{ marginBottom: '24px' }}>
         <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 className="card-title">Pending Recipient Applications</h2>
+          <h2 className="card-title">Recipient Applications</h2>
           <span style={{ 
-            backgroundColor: pendingRecipients.length > 0 ? '#fef3c7' : '#d1fae5',
-            color: pendingRecipients.length > 0 ? '#92400e' : '#065f46',
-            padding: '4px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: '600'
+            backgroundColor: pendingRecipients.filter(r => r.verification_status === 'pending').length > 0 ? '#fef3c7' : '#d1fae5',
+            color: pendingRecipients.filter(r => r.verification_status === 'pending').length > 0 ? '#92400e' : '#065f46',
+            padding: '4px 12px',
+            borderRadius: '12px',
+            fontSize: '12px',
+            fontWeight: '600'
           }}>
-            {pendingRecipients.length} Pending
+            {pendingRecipients.filter(r => r.verification_status === 'pending').length} Pending
           </span>
         </div>
-        <div className="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Organization</th>
-                <th>Contact Person</th>
-                <th>Phone</th>
-                <th>Applied On</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pendingRecipients.length > 0 ? (
-                pendingRecipients.map(recipient => (
-                  <tr key={recipient.recipient_id}>
-                    <td>{recipient.recipient_id}</td>
-                    <td>{recipient.full_name}</td>
-                    <td>{recipient.guardian_name}</td>
-                    <td>{recipient.guardian_contact}</td>
-                    <td>{new Date(recipient.registration_date).toLocaleDateString()}</td>
-                    <td>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <button 
-                          onClick={() => { setSelectedRecipient(recipient); setShowPreviewModal(true); }}
-                          style={{ padding: '6px 10px', fontSize: '14px', cursor: 'pointer', backgroundColor: '#f3f4f6', border: '1px solid #d1d5db', borderRadius: '4px' }}
-                          title="View Application"
-                        >
-                          📄
-                        </button>
-                        <button 
-                          onClick={() => handleApprove(recipient)}
-                          disabled={actionLoading}
-                          style={{ padding: '6px 10px', fontSize: '14px', cursor: 'pointer', backgroundColor: '#d1fae5', border: '1px solid #6ee7b7', borderRadius: '4px', color: '#065f46' }}
-                          title="Approve"
-                        >
-                          ✓
-                        </button>
-                        <button 
-                          onClick={() => { setSelectedRecipient(recipient); setShowRejectModal(true); }}
-                          style={{ padding: '6px 10px', fontSize: '14px', cursor: 'pointer', backgroundColor: '#fee2e2', border: '1px solid #fca5a5', borderRadius: '4px', color: '#991b1b' }}
-                          title="Reject"
-                        >
-                          ✗
-                        </button>
+        <div className="card-body">
+          <div className="filters" style={{ marginBottom: '16px' }}>
+            <div className="filter-group">
+              <label className="filter-label">Status</label>
+              <select 
+                className="filter-select" 
+                value={recipientStatusFilter}
+                onChange={(e) => setRecipientStatusFilter(e.target.value)}
+              >
+                <option value="pending">Pending</option>
+                <option value="verified">Verified</option>
+                <option value="rejected">Rejected</option>
+                <option value="all">All</option>
+              </select>
+            </div>
+            <div className="filter-group">
+              <label className="filter-label">Search</label>
+              <input 
+                type="text" 
+                className="filter-input" 
+                placeholder="Name or phone..."
+                value={recipientSearchTerm}
+                onChange={(e) => setRecipientSearchTerm(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Organization</th>
+                  <th>Type</th>
+                  <th>Contact Person</th>
+                  <th>Phone</th>
+                  <th>Applied On</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedRecipients.length > 0 ? (
+                  paginatedRecipients.map(recipient => (
+                    <tr key={recipient.recipient_id}>
+                      <td>{recipient.recipient_id}</td>
+                      <td>{recipient.full_name}</td>
+                      <td>{recipient.needs_description?.replace('Type: ', '') || '-'}</td>
+                      <td>{recipient.guardian_name}</td>
+                      <td>{recipient.guardian_contact}</td>
+                      <td>{new Date(recipient.registration_date).toLocaleDateString()}</td>
+                      <td>
+                        <span className={`status-badge ${
+                          recipient.verification_status === 'verified' ? 'approved' : 
+                          recipient.verification_status === 'rejected' ? 'rejected' : 'pending'
+                        }`}>
+                          {recipient.verification_status.charAt(0).toUpperCase() + recipient.verification_status.slice(1)}
+                        </span>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button 
+                            className="btn btn-sm"
+                            style={{ padding: '4px 8px', fontSize: '14px', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                            onClick={() => handlePreview(recipient)}
+                            title="Preview Application"
+                          >
+                            📄
+                          </button>
+                          {recipient.verification_status === 'pending' && (
+                            <>
+                              <button 
+                                className="btn btn-sm"
+                                style={{ padding: '4px 8px', fontSize: '14px', backgroundColor: '#22c55e', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                onClick={() => handleApprove(recipient)}
+                                disabled={actionLoading}
+                                title="Approve"
+                              >
+                                ✓
+                              </button>
+                              <button 
+                                className="btn btn-sm"
+                                style={{ padding: '4px 8px', fontSize: '14px', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                onClick={() => { setSelectedRecipient(recipient); setShowRejectModal(true); }}
+                                disabled={actionLoading}
+                                title="Reject"
+                              >
+                                ✗
+                              </button>
+                            </>
+                          )}
+                          {recipient.verification_status === 'verified' && recipient.recipient_code && (
+                            <span style={{ fontSize: '11px', color: '#6b7280', fontFamily: 'monospace' }}>
+                              {recipient.recipient_code}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="8">
+                      <div className="empty-state">
+                        <div className="empty-state-icon">📋</div>
+                        <div className="empty-state-text">No applications found</div>
                       </div>
                     </td>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan="6" style={{ textAlign: 'center', padding: '24px', color: '#6b7280' }}>
-                    No pending applications
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                )}
+              </tbody>
+            </table>
+          </div>
+          {pendingRecipients.length > recipientItemsPerPage && (
+            <div className="pagination">
+              <div className="pagination-info">
+                Showing {recipientStartIndex + 1} to {Math.min(recipientStartIndex + recipientItemsPerPage, pendingRecipients.length)} of {pendingRecipients.length}
+              </div>
+              <div className="pagination-controls">
+                <button 
+                  className="pagination-btn" 
+                  onClick={() => setRecipientPage(p => Math.max(1, p - 1))}
+                  disabled={recipientPage === 1}
+                >
+                  Previous
+                </button>
+                <button 
+                  className="pagination-btn" 
+                  onClick={() => setRecipientPage(p => Math.min(recipientTotalPages, p + 1))}
+                  disabled={recipientPage === recipientTotalPages}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1449,8 +1382,10 @@ function RequestsManagement() {
               <h3 style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px' }}>Organization Information</h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', backgroundColor: '#f9fafb', padding: '16px', borderRadius: '8px' }}>
                 <div><strong>Organization:</strong> {selectedRecipient.full_name}</div>
+                <div><strong>Type:</strong> {selectedRecipient.needs_description?.replace('Type: ', '') || '-'}</div>
                 <div><strong>Contact Person:</strong> {selectedRecipient.guardian_name}</div>
                 <div><strong>Phone:</strong> {selectedRecipient.guardian_contact}</div>
+                <div><strong>Email:</strong> {selectedRecipient.contact_email || '-'}</div>
                 <div><strong>Applied:</strong> {new Date(selectedRecipient.registration_date).toLocaleDateString()}</div>
               </div>
             </div>
@@ -1480,19 +1415,23 @@ function RequestsManagement() {
               >
                 Close
               </button>
-              <button 
-                onClick={() => { setShowPreviewModal(false); setShowRejectModal(true); }}
-                style={{ padding: '10px 20px', borderRadius: '6px', border: 'none', backgroundColor: '#ef4444', color: 'white', cursor: 'pointer' }}
-              >
-                ✗ Reject
-              </button>
-              <button 
-                onClick={() => handleApprove(selectedRecipient)}
-                disabled={actionLoading}
-                style={{ padding: '10px 20px', borderRadius: '6px', border: 'none', backgroundColor: '#22c55e', color: 'white', cursor: 'pointer' }}
-              >
-                ✓ Approve
-              </button>
+              {selectedRecipient.verification_status === 'pending' && (
+                <>
+                  <button 
+                    onClick={() => { setShowPreviewModal(false); setShowRejectModal(true); }}
+                    style={{ padding: '10px 20px', borderRadius: '6px', border: 'none', backgroundColor: '#ef4444', color: 'white', cursor: 'pointer' }}
+                  >
+                    Reject
+                  </button>
+                  <button 
+                    onClick={() => { setShowPreviewModal(false); handleApprove(selectedRecipient); }}
+                    disabled={actionLoading}
+                    style={{ padding: '10px 20px', borderRadius: '6px', border: 'none', backgroundColor: '#22c55e', color: 'white', cursor: 'pointer' }}
+                  >
+                    Approve
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -1505,25 +1444,37 @@ function RequestsManagement() {
           backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
         }}>
           <div style={{
-            backgroundColor: 'white', borderRadius: '12px', padding: '32px', maxWidth: '400px', width: '90%', textAlign: 'center'
+            backgroundColor: 'white', borderRadius: '12px', padding: '32px', maxWidth: '450px', width: '90%', textAlign: 'center'
           }}>
             <div style={{ fontSize: '48px', marginBottom: '16px' }}>✅</div>
-            <h2 style={{ margin: '0 0 16px 0', color: '#22c55e' }}>Application Approved!</h2>
-            <p style={{ color: '#6b7280', marginBottom: '16px' }}>Recipient Code Generated:</p>
-            <div style={{ 
-              backgroundColor: '#f0fdf4', padding: '16px', borderRadius: '8px', 
-              border: '2px dashed #22c55e', marginBottom: '20px'
-            }}>
-              <span style={{ fontSize: '20px', fontWeight: '700', fontFamily: 'monospace', color: '#166534' }}>
-                {approvalCredentials.recipientCode}
-              </span>
+            <h2 style={{ margin: '0 0 8px 0', color: '#22c55e' }}>Application Approved!</h2>
+            <p style={{ color: '#6b7280', marginBottom: '20px' }}>Share these credentials with the recipient:</p>
+            
+            <div style={{ backgroundColor: '#f0fdf4', padding: '20px', borderRadius: '8px', marginBottom: '20px', textAlign: 'left' }}>
+              <div style={{ marginBottom: '12px' }}>
+                <strong>Name:</strong> {approvalCredentials.fullName}
+              </div>
+              <div style={{ marginBottom: '12px' }}>
+                <strong>Contact:</strong> {approvalCredentials.contact}
+              </div>
+              <div style={{ backgroundColor: '#dcfce7', padding: '12px', borderRadius: '6px', marginTop: '12px' }}>
+                <strong>Recipient Code:</strong>
+                <div style={{ 
+                  fontFamily: 'monospace', fontSize: '18px', fontWeight: 'bold', 
+                  color: '#166534', marginTop: '4px', letterSpacing: '1px'
+                }}>
+                  {approvalCredentials.recipientCode}
+                </div>
+              </div>
             </div>
-            <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '20px' }}>
-              Please share this code with the recipient. They can use this to login to the portal.
+
+            <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '20px' }}>
+              The recipient can use this code to login to the Recipient Portal
             </p>
+
             <button 
-              onClick={() => { setShowApprovalModal(false); setApprovalCredentials(null); setSelectedRecipient(null); }}
-              style={{ padding: '12px 32px', borderRadius: '6px', border: 'none', backgroundColor: '#22c55e', color: 'white', cursor: 'pointer', fontSize: '16px' }}
+              onClick={() => { setShowApprovalModal(false); setApprovalCredentials(null); }}
+              style={{ padding: '12px 32px', borderRadius: '6px', border: 'none', backgroundColor: '#3b82f6', color: 'white', cursor: 'pointer', fontSize: '16px' }}
             >
               Done
             </button>
@@ -1581,8 +1532,183 @@ function RequestsManagement() {
         </div>
       )}
 
-      {/* Item Requests Section */}
-      <h2 style={{ marginBottom: '16px' }}>Item Requests</h2>
+      {/* Communities/Institutions Section */}
+      <h2 style={{ marginBottom: '16px' }}>Institutions</h2>
+      <div className="filters">
+        <div className="filter-group">
+          <label className="filter-label">Institution Type</label>
+          <select 
+            className="filter-select" 
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+          >
+            <option value="all">All Types</option>
+            {types.map(type => (
+              <option key={type} value={type}>{type}</option>
+            ))}
+          </select>
+        </div>
+        <div className="filter-group">
+          <label className="filter-label">Verification Status</label>
+          <select 
+            className="filter-select" 
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="all">All Statuses</option>
+            <option value="verified">Verified</option>
+            <option value="pending">Pending</option>
+          </select>
+        </div>
+        <div className="filter-group">
+          <label className="filter-label">Search</label>
+          <input 
+            type="text" 
+            className="filter-input" 
+            placeholder="Community name or ID..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Community ID</th>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Contact Person</th>
+                <th>Contact Info</th>
+                <th>Total Requests</th>
+                <th>Items Received</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paginatedCommunities.length > 0 ? (
+                paginatedCommunities.map(community => (
+                  <tr key={community.community_id}>
+                    <td>{community.community_id}</td>
+                    <td>{community.name}</td>
+                    <td>{community.type}</td>
+                    <td>{community.contact_person}</td>
+                    <td>
+                      <div>{community.email}</div>
+                      <div style={{ fontSize: '12px', color: '#6b7280' }}>{community.phone}</div>
+                    </td>
+                    <td>{community.total_requests}</td>
+                    <td>{community.items_received}</td>
+                    <td>
+                      <span className={`status-badge ${community.verification_status === 'verified' ? 'approved' : 'pending'}`}>
+                        {community.verification_status.charAt(0).toUpperCase() + community.verification_status.slice(1)}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="8">
+                    <div className="empty-state">
+                      <div className="empty-state-icon">🏫</div>
+                      <div className="empty-state-text">No communities found</div>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        {filteredCommunities.length > 0 && (
+          <div className="pagination">
+            <div className="pagination-info">
+              Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, filteredCommunities.length)} of {filteredCommunities.length} communities
+            </div>
+            <div className="pagination-controls">
+              <button 
+                className="pagination-btn" 
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+              >
+                Previous
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                <button
+                  key={page}
+                  className={`pagination-btn ${currentPage === page ? 'active' : ''}`}
+                  onClick={() => setCurrentPage(page)}
+                >
+                  {page}
+                </button>
+              ))}
+              <button 
+                className="pagination-btn" 
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+
+    </div>
+  );
+}
+
+// Requests Management Page
+function RequestsManagement() {
+  const [requests, setRequests] = useState([]);
+  const [filteredRequests, setFilteredRequests] = useState([]);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
+  useEffect(() => {
+    fetch('http://localhost:5000/api/admin/requests')
+      .then(response => response.json())
+      .then(data => {
+        setRequests(data.requests || []);
+        setFilteredRequests(data.requests || []);
+      })
+      .catch(error => console.error('Error fetching requests:', error));
+  }, []);
+
+
+  useEffect(() => {
+    let filtered = requests;
+
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(r => r.status === statusFilter);
+    }
+
+    if (searchTerm) {
+      filtered = filtered.filter(r => 
+        r.request_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        r.community_name.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    setFilteredRequests(filtered);
+    setCurrentPage(1);
+  }, [statusFilter, searchTerm, requests]);
+
+  const totalPages = Math.ceil(filteredRequests.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedRequests = filteredRequests.slice(startIndex, startIndex + itemsPerPage);
+
+  return (
+    <div>
+      <div className="page-header">
+        <h1 className="page-title">Community Requests</h1>
+        <p className="page-subtitle">Auto-approval system: Items automatically allocated to earliest requester when in stock</p>
+      </div>
+
       <div className="filters">
         <div className="filter-group">
           <label className="filter-label">Request Status</label>
@@ -1631,7 +1757,7 @@ function RequestsManagement() {
                     <td>{request.request_id}</td>
                     <td>{request.community_name}</td>
                     <td>
-                      {request.items_requested?.map((item, idx) => (
+                      {request.items_requested.map((item, idx) => (
                         <div key={idx} style={{ fontSize: '12px' }}>
                           {item.category} ({item.quantity})
                         </div>
@@ -1644,7 +1770,7 @@ function RequestsManagement() {
                         request.status === 'in_fulfillment' ? 'active' : 'pending'
                       }`}>
                         {request.status === 'in_fulfillment' ? 'In Fulfillment' : 
-                         request.status?.charAt(0).toUpperCase() + request.status?.slice(1)}
+                         request.status.charAt(0).toUpperCase() + request.status.slice(1)}
                       </span>
                     </td>
                     <td>{request.items_allocated} / {request.items_total}</td>
@@ -1703,6 +1829,8 @@ function RequestsManagement() {
           </div>
         )}
       </div>
+
+
     </div>
   );
 }

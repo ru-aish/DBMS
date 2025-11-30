@@ -425,7 +425,7 @@ const Dashboard = ({ onNavigate, onDonate }) => {
   const getStatusBadge = (status) => {
     const badges = {
       distributed: { text: 'DISTRIBUTED', class: 'completed' },
-      available: { text: 'AVAILABLE', class: 'pending' },
+      available: { text: 'PENDING', class: 'pending' },
       reserved: { text: 'RESERVED', class: 'warning' }
     };
     return badges[status] || { text: status?.toUpperCase() || 'UNKNOWN', class: 'pending' };
@@ -642,7 +642,7 @@ const DonateItems = () => {
   const getStatusBadge = (status) => {
     const badges = {
       distributed: { text: 'DISTRIBUTED', class: 'completed' },
-      available: { text: 'AVAILABLE', class: 'pending' },
+      available: { text: 'PENDING', class: 'pending' },
       reserved: { text: 'RESERVED', class: 'warning' }
     };
     return badges[status] || { text: status?.toUpperCase() || 'UNKNOWN', class: 'pending' };
@@ -843,7 +843,7 @@ const DonationHistory = () => {
   const getStatusBadge = (status) => {
     const badges = {
       distributed: { text: 'DISTRIBUTED', class: 'completed' },
-      available: { text: 'AVAILABLE', class: 'pending' },
+      available: { text: 'PENDING', class: 'pending' },
       reserved: { text: 'RESERVED', class: 'warning' }
     };
     return badges[status] || { text: status?.toUpperCase() || 'UNKNOWN', class: 'pending' };

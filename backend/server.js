@@ -120,7 +120,7 @@ app.get('/api/public/stats', async (req, res) => {
     
     // Get total items available
     const [itemsResult] = await connection.execute(
-      'SELECT COUNT(*) as total FROM ITEMS WHERE stock_status = "available"'
+      'SELECT COUNT(*) as total FROM ITEMS WHERE availability_status = "available"'
     );
     
     // Get active donors
@@ -189,24 +189,27 @@ app.get('/api/public/testimonials', async (req, res) => {
 
 // ============= RECIPIENT ENDPOINTS =============
 
-// Recipient login - simple identifier-based (no password)
+// Recipient login - using recipient_code (generated after admin approval)
 app.post('/api/recipient/login', async (req, res) => {
   try {
     const { identifier } = req.body;
 
     if (!identifier) {
-      return res.status(400).json({ message: 'Phone number or ID required' });
+      return res.status(400).json({ message: 'Recipient code required' });
     }
 
     const connection = await pool.getConnection();
     const [rows] = await connection.execute(
-      'SELECT recipient_id, full_name, age, gender, guardian_contact, address, verification_status FROM RECIPIENTS WHERE (guardian_contact = ? OR recipient_id = ?)',
-      [identifier, identifier]
+      `SELECT recipient_id, full_name, age, gender, guardian_contact, address, 
+              verification_status, recipient_code 
+       FROM RECIPIENTS 
+       WHERE recipient_code = ? AND verification_status = 'verified'`,
+      [identifier]
     );
     connection.release();
 
     if (rows.length === 0) {
-      return res.status(401).json({ message: 'Recipient not found' });
+      return res.status(401).json({ message: 'Invalid recipient code or account not approved yet' });
     }
 
     const recipient = rows[0];
@@ -216,6 +219,7 @@ app.post('/api/recipient/login', async (req, res) => {
       name: recipient.full_name,
       phone: recipient.guardian_contact,
       email: recipient.guardian_contact,
+      recipientCode: recipient.recipient_code,
       registrationDate: new Date().toISOString().split('T')[0]
     });
   } catch (error) {
@@ -227,10 +231,10 @@ app.post('/api/recipient/login', async (req, res) => {
 // Recipient registration
 app.post('/api/recipient/register', async (req, res) => {
   try {
-    const { full_name, age, gender, guardian_name, guardian_contact, address, needs_description } = req.body;
+    const { full_name, guardian_name, guardian_contact, address, application_letter } = req.body;
 
-    if (!full_name || !age || !gender || !guardian_name || !guardian_contact || !address) {
-      return res.status(400).json({ message: 'All required fields must be filled' });
+    if (!full_name || !guardian_name || !guardian_contact || !address) {
+      return res.status(400).json({ message: 'Organization name, contact person, phone, and address are required' });
     }
 
     const connection = await pool.getConnection();
@@ -241,17 +245,17 @@ app.post('/api/recipient/register', async (req, res) => {
 
     if (existingUsers.length > 0) {
       connection.release();
-      return res.status(409).json({ message: 'Contact already registered' });
+      return res.status(409).json({ message: 'This phone number is already registered. Please use a different number or login with your existing account.' });
     }
 
     const [result] = await connection.execute(
-      'INSERT INTO RECIPIENTS (full_name, age, gender, guardian_name, guardian_contact, address, needs_description, verification_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [full_name, age, gender, guardian_name, guardian_contact, address, needs_description || null, 'pending']
+      'INSERT INTO RECIPIENTS (full_name, age, gender, guardian_name, guardian_contact, address, application_letter, verification_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [full_name, null, null, guardian_name, guardian_contact, address, application_letter || null, 'pending']
     );
     connection.release();
 
     return res.status(201).json({
-      message: 'Registration submitted successfully. Your application is pending admin approval.',
+      message: 'Application submitted successfully. Your application is pending admin approval.',
       recipient_id: result.insertId
     });
   } catch (error) {
@@ -275,7 +279,7 @@ app.get('/api/items/available', async (req, res) => {
   }
 });
 
-// Submit item request
+// Submit item request - AUTO-ALLOCATES if item is available
 app.post('/api/recipient/request', async (req, res) => {
   try {
     const { recipient_id, item_id, request_reason, quantity } = req.body;
@@ -286,29 +290,44 @@ app.post('/api/recipient/request', async (req, res) => {
 
     const connection = await pool.getConnection();
     const [item] = await connection.execute(
-      'SELECT availability_status FROM ITEMS WHERE item_id = ?',
+      'SELECT availability_status, item_name FROM ITEMS WHERE item_id = ?',
       [item_id]
     );
 
-    if (item.length === 0 || item[0].availability_status !== 'available') {
+    if (item.length === 0) {
       connection.release();
-      return res.status(400).json({ message: 'Item not available' });
+      return res.status(404).json({ message: 'Item not found' });
     }
 
-    const [result] = await connection.execute(
+    if (item[0].availability_status !== 'available') {
+      connection.release();
+      return res.status(400).json({ message: 'Item is not available' });
+    }
+
+    // Auto-allocate: Create request as 'approved' and create distribution
+    const [requestResult] = await connection.execute(
       'INSERT INTO ITEM_REQUESTS (recipient_id, item_id, request_reason, quantity_requested, request_status) VALUES (?, ?, ?, ?, ?)',
-      [recipient_id, item_id, request_reason || null, quantity || 1, 'pending']
+      [recipient_id, item_id, request_reason || null, quantity || 1, 'approved']
     );
 
+    // Create distribution record
     await connection.execute(
-      'UPDATE ITEMS SET availability_status = "reserved" WHERE item_id = ?',
+      'INSERT INTO DISTRIBUTIONS (item_id, recipient_id, distribution_date, notes) VALUES (?, ?, NOW(), ?)',
+      [item_id, recipient_id, `Auto-allocated: ${request_reason || 'Item requested'}`]
+    );
+
+    // Update item status to distributed
+    await connection.execute(
+      'UPDATE ITEMS SET availability_status = "distributed" WHERE item_id = ?',
       [item_id]
     );
+    
     connection.release();
 
     return res.status(201).json({
-      message: 'Request submitted successfully',
-      request_id: result.insertId
+      message: `Item "${item[0].item_name}" has been allocated to you!`,
+      request_id: requestResult.insertId,
+      status: 'approved'
     });
   } catch (error) {
     console.error('Error submitting request:', error);
@@ -427,16 +446,18 @@ app.get('/api/recipient/:recipientId/dashboard', async (req, res) => {
     const { recipientId } = req.params;
     const connection = await pool.getConnection();
 
+    // Items received by this recipient
     const [itemsReceived] = await connection.execute(
       'SELECT COUNT(*) as count FROM DISTRIBUTIONS WHERE recipient_id = ?',
       [recipientId]
     );
 
-    const [pendingRequests] = await connection.execute(
-      'SELECT COUNT(*) as count FROM ITEM_REQUESTS WHERE recipient_id = ? AND request_status = "pending"',
-      [recipientId]
+    // Total available items in the system
+    const [availableItems] = await connection.execute(
+      'SELECT COUNT(*) as count FROM ITEMS WHERE availability_status = "available"'
     );
 
+    // Total value of items received
     const [totalValue] = await connection.execute(
       `SELECT SUM(i.estimated_value) as total 
        FROM DISTRIBUTIONS d 
@@ -450,7 +471,7 @@ app.get('/api/recipient/:recipientId/dashboard', async (req, res) => {
     return res.json({
       stats: {
         itemsReceived: itemsReceived[0].count,
-        pendingRequests: pendingRequests[0].count,
+        availableItems: availableItems[0].count,
         totalValue: totalValue[0].total || 0
       }
     });
@@ -1116,8 +1137,8 @@ app.get('/api/admin/recipients', async (req, res) => {
     const offset = (page - 1) * limit;
 
     let query = `SELECT r.recipient_id, r.full_name, r.age, r.gender, r.guardian_name,
-                 r.guardian_contact, r.address, r.needs_description, r.verification_status, 
-                 r.registration_date
+                 r.guardian_contact, r.address, r.needs_description, r.application_letter,
+                 r.verification_status, r.recipient_code, r.registration_date
                  FROM RECIPIENTS r
                  WHERE 1=1`;
     
@@ -1204,12 +1225,13 @@ app.post('/api/admin/recipients/:id/approve', async (req, res) => {
     // Generate random password (8 characters: letters + numbers)
     const password = Math.random().toString(36).slice(-8).toUpperCase();
 
-    // Update recipient with approval (just change verification status for now)
+    // Update recipient with approval and save the recipient code
     await connection.execute(
       `UPDATE RECIPIENTS 
-       SET verification_status = 'verified'
+       SET verification_status = 'verified',
+           recipient_code = ?
        WHERE recipient_id = ?`,
-      [id]
+      [recipientCode, id]
     );
 
     connection.release();

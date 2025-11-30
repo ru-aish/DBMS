@@ -281,31 +281,26 @@ function LandingPage({ setCurrentPage, toggleTheme, theme }) {
 
 // ============= LOGIN PAGE =============
 function LoginPage({ setCurrentPage, toggleTheme, theme }) {
-  const [identifier, setIdentifier] = useState('');
+  const [recipientCode, setRecipientCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useContext(AuthContext);
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    if (!identifier) {
-      setError('Phone number or Recipient ID is required');
+    if (!recipientCode) {
+      setError('Recipient Code is required');
       return;
     }
     setLoading(true);
     setError('');
-    const success = await login(identifier);
+    const success = await login(recipientCode);
     setLoading(false);
     if (success) {
       setCurrentPage('dashboard');
     } else {
-      setError('Recipient not found. Please check your phone number or ID.');
+      setError('Invalid recipient code or account not approved yet.');
     }
-  };
-
-  const fillDemoCredentials = () => {
-    setIdentifier('9876543210');
-    setError('');
   };
 
   return React.createElement(
@@ -330,14 +325,18 @@ function LoginPage({ setCurrentPage, toggleTheme, theme }) {
           React.createElement(
             'div',
             { style: { marginBottom: '24px' } },
-            React.createElement('label', { style: { display: 'block', marginBottom: '8px', fontWeight: '500' } }, 'Phone Number or Recipient ID'),
+            React.createElement('label', { style: { display: 'block', marginBottom: '8px', fontWeight: '500' } }, 'Recipient Code'),
             React.createElement('input', { 
               type: 'text', 
               className: 'form-control', 
-              value: identifier, 
-              onChange: (e) => setIdentifier(e.target.value), 
-              placeholder: 'Enter guardian phone or recipient ID' 
-            })
+              value: recipientCode, 
+              onChange: (e) => setRecipientCode(e.target.value.toUpperCase()), 
+              placeholder: 'Enter your recipient code (e.g., RCP123456)',
+              style: { fontFamily: 'monospace', fontSize: '16px', letterSpacing: '1px' }
+            }),
+            React.createElement('p', { style: { fontSize: '12px', color: 'var(--color-text-secondary)', marginTop: '8px' } }, 
+              'The code you received after admin approval'
+            )
           ),
           React.createElement('button', { 
             type: 'submit', 
@@ -352,31 +351,6 @@ function LoginPage({ setCurrentPage, toggleTheme, theme }) {
             React.createElement('button', { type: 'button', className: 'btn btn--outline', style: { padding: 0, border: 'none', color: 'var(--color-primary)', cursor: 'pointer', textDecoration: 'underline' }, onClick: () => setCurrentPage('register') }, 'Register here')
           )
         )
-      ),
-      // Example Login Box
-      React.createElement(
-        'div',
-        { className: 'card', style: { padding: '20px', marginTop: '16px', backgroundColor: 'var(--color-surface)', border: '2px dashed var(--color-primary)' } },
-        React.createElement('h4', { style: { margin: '0 0 12px 0', fontSize: '14px', color: 'var(--color-primary)' } }, 'Demo Login'),
-        React.createElement('p', { style: { margin: '0 0 12px 0', fontSize: '13px', color: 'var(--color-text-secondary)' } }, 
-          'Use the example credentials below to explore the portal:'
-        ),
-        React.createElement(
-          'div',
-          { style: { backgroundColor: 'var(--color-background)', padding: '12px', borderRadius: '6px', marginBottom: '12px' } },
-          React.createElement('p', { style: { margin: '0 0 4px 0', fontSize: '13px' } }, 
-            React.createElement('strong', null, 'Phone: '), '9876543210'
-          ),
-          React.createElement('p', { style: { margin: 0, fontSize: '12px', color: 'var(--color-text-secondary)' } }, 
-            '(Demo recipient account)'
-          )
-        ),
-        React.createElement('button', { 
-          type: 'button',
-          className: 'btn btn--secondary btn--full-width', 
-          onClick: fillDemoCredentials,
-          style: { fontSize: '13px' }
-        }, 'Use Demo Credentials')
       ),
       React.createElement(
         'div',
@@ -394,9 +368,18 @@ function LoginPage({ setCurrentPage, toggleTheme, theme }) {
 
 // ============= REGISTER PAGE =============
 function RegisterPage({ setCurrentPage, toggleTheme, theme }) {
-  const [formData, setFormData] = useState({ name: '', email: '', phone: '' });
+  const [step, setStep] = useState(1);
+  const [formData, setFormData] = useState({ 
+    organizationName: '', 
+    contactPerson: '', 
+    phone: '', 
+    email: '', 
+    address: '',
+    applicationLetter: ''
+  });
   const [errors, setErrors] = useState({});
-  const { register } = useContext(AuthContext);
+  const [loading, setLoading] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -406,72 +389,271 @@ function RegisterPage({ setCurrentPage, toggleTheme, theme }) {
     }
   };
 
-  const validateForm = () => {
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (!file.name.endsWith('.txt')) {
+        setErrors(prev => ({ ...prev, applicationLetter: 'Only .txt files are allowed' }));
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setFormData(prev => ({ ...prev, applicationLetter: event.target.result }));
+        setErrors(prev => ({ ...prev, applicationLetter: '' }));
+      };
+      reader.readAsText(file);
+    }
+  };
+
+  const validateStep1 = () => {
     const newErrors = {};
-    if (!formData.name || formData.name.length < 3) newErrors.name = 'Name must be at least 3 characters';
-    if (!formData.email || !/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = 'Valid email is required';
-    if (!formData.phone || !/^\+?91?[0-9]{10}$/.test(formData.phone.replace(/\s/g, ''))) newErrors.phone = 'Valid phone is required';
+    if (!formData.organizationName || formData.organizationName.length < 3) newErrors.organizationName = 'Organization name must be at least 3 characters';
+    if (!formData.contactPerson || formData.contactPerson.length < 3) newErrors.contactPerson = 'Contact person name is required';
+    if (!formData.phone || !/^[0-9]{10}$/.test(formData.phone.replace(/[\s\-\+]/g, '').slice(-10))) newErrors.phone = 'Valid 10-digit phone is required';
+    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) newErrors.email = 'Invalid email format';
+    if (!formData.address || formData.address.length < 10) newErrors.address = 'Address must be at least 10 characters';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleRegister = async (e) => {
+  const handleNext = (e) => {
     e.preventDefault();
-    if (validateForm()) {
-      const success = await register({ ...formData, password: 'password123' });
-      if (success) {
-        setCurrentPage('dashboard');
-      }
+    if (validateStep1()) {
+      setStep(2);
     }
   };
+
+  const handleBack = () => {
+    setStep(1);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setErrors({});
+    
+    try {
+      const response = await fetch('http://localhost:5000/api/recipient/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          full_name: formData.organizationName,
+          guardian_name: formData.contactPerson,
+          guardian_contact: formData.phone.replace(/[\s\-\+]/g, '').slice(-10),
+          address: formData.address,
+          application_letter: formData.applicationLetter || null
+        })
+      });
+
+      const data = await response.json();
+      
+      if (response.ok) {
+        setSubmitSuccess(true);
+      } else {
+        setErrors({ submit: data.message || 'Registration failed. Please try again.' });
+      }
+    } catch (error) {
+      console.error('Registration error:', error);
+      setErrors({ submit: 'Connection error. Please try again.' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Success screen
+  if (submitSuccess) {
+    return React.createElement(
+      'div',
+      { style: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--color-background)', padding: '24px' } },
+      React.createElement(
+        'div',
+        { className: 'card', style: { maxWidth: '450px', width: '100%', padding: '48px 32px', textAlign: 'center' } },
+        React.createElement('div', { style: { fontSize: '64px', marginBottom: '24px' } }, '✅'),
+        React.createElement('h1', { style: { margin: '0 0 16px 0', color: '#22c55e' } }, 'Application Submitted!'),
+        React.createElement('p', { style: { color: 'var(--color-text-secondary)', marginBottom: '24px', lineHeight: '1.6' } }, 
+          'Your community application has been submitted successfully. An administrator will review your application and contact you once approved.'
+        ),
+        React.createElement('p', { style: { color: 'var(--color-text-secondary)', marginBottom: '32px', fontSize: '14px' } }, 
+          'Upon approval, you will receive a unique Recipient Code that you can use to login and request resources.'
+        ),
+        React.createElement('button', { 
+          className: 'btn btn--primary', 
+          onClick: () => setCurrentPage('login'),
+          style: { padding: '12px 32px' }
+        }, 'Go to Login →')
+      )
+    );
+  }
 
   return React.createElement(
     'div',
     { style: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--color-background)', padding: '24px' } },
     React.createElement(
       'div',
-      { style: { maxWidth: '400px', width: '100%' } },
+      { style: { maxWidth: '500px', width: '100%' } },
       React.createElement(
         'div',
         { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' } },
-        React.createElement('h1', { style: { margin: 0, fontSize: '28px', color: 'var(--color-primary)' } }, 'Register'),
-        React.createElement('button', { className: 'btn btn--secondary', onClick: toggleTheme }, theme === 'light' ? '🌙' : '☀️')
+        React.createElement('h1', { style: { margin: 0, fontSize: '24px', color: 'var(--color-primary)' } }, 
+          step === 1 ? 'Register Your Community' : 'Application Letter'
+        ),
+        React.createElement('button', { className: 'btn btn--secondary', onClick: toggleTheme, style: { padding: '8px' } }, theme === 'light' ? '🌙' : '☀️')
       ),
+      
+      // Step indicator
+      React.createElement(
+        'div',
+        { style: { display: 'flex', marginBottom: '24px', gap: '8px' } },
+        React.createElement('div', { style: { flex: 1, height: '4px', borderRadius: '2px', backgroundColor: 'var(--color-primary)' } }),
+        React.createElement('div', { style: { flex: 1, height: '4px', borderRadius: '2px', backgroundColor: step === 2 ? 'var(--color-primary)' : 'var(--color-card-border)' } })
+      ),
+
       React.createElement(
         'div',
         { className: 'card', style: { padding: '32px' } },
-        React.createElement(
+        
+        errors.submit && React.createElement('div', { 
+          style: { color: '#dc2626', marginBottom: '16px', padding: '12px', backgroundColor: '#fef2f2', borderRadius: '6px', border: '1px solid #fecaca' } 
+        }, errors.submit),
+
+        // Step 1: Basic Information
+        step === 1 && React.createElement(
           'form',
-          { onSubmit: handleRegister },
+          { onSubmit: handleNext },
           React.createElement(
             'div',
             { style: { marginBottom: '16px' } },
-            React.createElement('label', { style: { display: 'block', marginBottom: '8px', fontWeight: '500' } }, 'Full Name'),
-            React.createElement('input', { type: 'text', name: 'name', className: 'form-control', value: formData.name, onChange: handleChange, placeholder: 'Enter your full name' }),
-            errors.name && React.createElement('p', { style: { color: 'var(--color-error)', fontSize: '12px', marginTop: '4px' } }, errors.name)
+            React.createElement('label', { style: { display: 'block', marginBottom: '8px', fontWeight: '500' } }, 'Organization Name *'),
+            React.createElement('input', { 
+              type: 'text', name: 'organizationName', className: 'form-control', 
+              value: formData.organizationName, onChange: handleChange, 
+              placeholder: 'e.g., Sunshine Orphanage, ABC School' 
+            }),
+            errors.organizationName && React.createElement('p', { style: { color: '#dc2626', fontSize: '12px', marginTop: '4px' } }, errors.organizationName)
           ),
           React.createElement(
             'div',
             { style: { marginBottom: '16px' } },
-            React.createElement('label', { style: { display: 'block', marginBottom: '8px', fontWeight: '500' } }, 'Email'),
-            React.createElement('input', { type: 'email', name: 'email', className: 'form-control', value: formData.email, onChange: handleChange, placeholder: 'Enter your email' }),
-            errors.email && React.createElement('p', { style: { color: 'var(--color-error)', fontSize: '12px', marginTop: '4px' } }, errors.email)
+            React.createElement('label', { style: { display: 'block', marginBottom: '8px', fontWeight: '500' } }, 'Contact Person Name *'),
+            React.createElement('input', { 
+              type: 'text', name: 'contactPerson', className: 'form-control', 
+              value: formData.contactPerson, onChange: handleChange, 
+              placeholder: 'Name of authorized representative' 
+            }),
+            errors.contactPerson && React.createElement('p', { style: { color: '#dc2626', fontSize: '12px', marginTop: '4px' } }, errors.contactPerson)
+          ),
+          React.createElement(
+            'div',
+            { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' } },
+            React.createElement(
+              'div',
+              null,
+              React.createElement('label', { style: { display: 'block', marginBottom: '8px', fontWeight: '500' } }, 'Phone *'),
+              React.createElement('input', { 
+                type: 'tel', name: 'phone', className: 'form-control', 
+                value: formData.phone, onChange: handleChange, 
+                placeholder: '9876543210' 
+              }),
+              errors.phone && React.createElement('p', { style: { color: '#dc2626', fontSize: '12px', marginTop: '4px' } }, errors.phone)
+            ),
+            React.createElement(
+              'div',
+              null,
+              React.createElement('label', { style: { display: 'block', marginBottom: '8px', fontWeight: '500' } }, 'Email (Optional)'),
+              React.createElement('input', { 
+                type: 'email', name: 'email', className: 'form-control', 
+                value: formData.email, onChange: handleChange, 
+                placeholder: 'email@org.com' 
+              }),
+              errors.email && React.createElement('p', { style: { color: '#dc2626', fontSize: '12px', marginTop: '4px' } }, errors.email)
+            )
           ),
           React.createElement(
             'div',
             { style: { marginBottom: '24px' } },
-            React.createElement('label', { style: { display: 'block', marginBottom: '8px', fontWeight: '500' } }, 'Phone'),
-            React.createElement('input', { type: 'tel', name: 'phone', className: 'form-control', value: formData.phone, onChange: handleChange, placeholder: '+91 XXXXX XXXXX' }),
-            errors.phone && React.createElement('p', { style: { color: 'var(--color-error)', fontSize: '12px', marginTop: '4px' } }, errors.phone)
+            React.createElement('label', { style: { display: 'block', marginBottom: '8px', fontWeight: '500' } }, 'Address *'),
+            React.createElement('textarea', { 
+              name: 'address', className: 'form-control', 
+              value: formData.address, onChange: handleChange, 
+              placeholder: 'Full address with city, state, and pin code',
+              style: { minHeight: '80px', resize: 'vertical' }
+            }),
+            errors.address && React.createElement('p', { style: { color: '#dc2626', fontSize: '12px', marginTop: '4px' } }, errors.address)
           ),
-          React.createElement('button', { type: 'submit', className: 'btn btn--primary btn--full-width', style: { marginBottom: '16px' } }, 'Register'),
+          React.createElement('button', { 
+            type: 'submit', className: 'btn btn--primary btn--full-width', 
+            style: { marginBottom: '16px', padding: '12px' } 
+          }, 'Next →'),
           React.createElement(
             'p',
-            { style: { textAlign: 'center', color: 'var(--color-text-secondary)' } },
-            'Already have an account? ',
-            React.createElement('button', { type: 'button', className: 'btn btn--outline', style: { padding: 0, border: 'none', color: 'var(--color-primary)', cursor: 'pointer', textDecoration: 'underline' }, onClick: () => setCurrentPage('login') }, 'Login here')
+            { style: { textAlign: 'center', color: 'var(--color-text-secondary)', fontSize: '14px' } },
+            'Already registered? ',
+            React.createElement('button', { 
+              type: 'button', 
+              style: { padding: 0, border: 'none', background: 'none', color: 'var(--color-primary)', cursor: 'pointer', textDecoration: 'underline' }, 
+              onClick: () => setCurrentPage('login') 
+            }, 'Login here')
+          )
+        ),
+
+        // Step 2: Application Letter
+        step === 2 && React.createElement(
+          'form',
+          { onSubmit: handleSubmit },
+          React.createElement('p', { style: { marginBottom: '16px', color: 'var(--color-text-secondary)', fontSize: '14px' } }, 
+            'Write an application explaining why your organization needs resources. This helps us understand your needs better. (Optional)'
+          ),
+          React.createElement(
+            'div',
+            { style: { marginBottom: '16px' } },
+            React.createElement('label', { style: { display: 'block', marginBottom: '8px', fontWeight: '500' } }, 'Application Letter'),
+            React.createElement('textarea', { 
+              name: 'applicationLetter', className: 'form-control', 
+              value: formData.applicationLetter, onChange: handleChange, 
+              placeholder: 'Dear Sir/Madam,\n\nWe are writing on behalf of [Organization Name] to request resources for our beneficiaries...\n\nOur organization serves [X] children/people who...\n\nWe would greatly appreciate support in the form of...\n\nThank you for your consideration.\n\nRegards,\n[Your Name]',
+              style: { minHeight: '250px', resize: 'vertical', fontFamily: 'inherit', lineHeight: '1.6' }
+            }),
+            React.createElement('p', { style: { fontSize: '12px', color: 'var(--color-text-secondary)', marginTop: '4px' } }, 
+              formData.applicationLetter.length > 0 ? `${formData.applicationLetter.length} characters` : 'Optional - you can skip this'
+            ),
+            errors.applicationLetter && React.createElement('p', { style: { color: '#dc2626', fontSize: '12px', marginTop: '4px' } }, errors.applicationLetter)
+          ),
+          React.createElement(
+            'div',
+            { style: { marginBottom: '24px', padding: '16px', backgroundColor: 'var(--color-surface)', borderRadius: '8px', border: '1px dashed var(--color-card-border)' } },
+            React.createElement('p', { style: { margin: '0 0 8px 0', fontSize: '14px', fontWeight: '500' } }, 'OR Upload a .txt file:'),
+            React.createElement('input', { 
+              type: 'file', 
+              accept: '.txt',
+              onChange: handleFileUpload,
+              style: { fontSize: '14px' }
+            })
+          ),
+          React.createElement(
+            'div',
+            { style: { display: 'flex', gap: '12px' } },
+            React.createElement('button', { 
+              type: 'button', className: 'btn btn--secondary', 
+              onClick: handleBack, 
+              style: { flex: 1, padding: '12px' } 
+            }, '← Back'),
+            React.createElement('button', { 
+              type: 'submit', className: 'btn btn--primary', 
+              disabled: loading,
+              style: { flex: 2, padding: '12px' } 
+            }, loading ? 'Submitting...' : 'Submit Application')
           )
         )
+      ),
+      
+      React.createElement(
+        'div',
+        { style: { textAlign: 'center', marginTop: '16px' } },
+        React.createElement('button', { 
+          type: 'button', 
+          style: { padding: 0, border: 'none', background: 'none', color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: '13px' }, 
+          onClick: () => setCurrentPage('landing')
+        }, '← Back to Home')
       )
     )
   );
@@ -480,7 +662,7 @@ function RegisterPage({ setCurrentPage, toggleTheme, theme }) {
 // ============= DASHBOARD =============
 function Dashboard() {
   const { user } = useContext(AuthContext);
-  const [stats, setStats] = useState({ itemsReceived: 0, pendingRequests: 0, totalValue: 0 });
+  const [stats, setStats] = useState({ itemsReceived: 0, availableItems: 0, totalValue: 0 });
   const [recentRequests, setRecentRequests] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -496,7 +678,7 @@ function Dashboard() {
           const data = await statsResponse.json();
           setStats({
             itemsReceived: data.stats.itemsReceived || 0,
-            pendingRequests: data.stats.pendingRequests || 0,
+            availableItems: data.stats.availableItems || 0,
             totalValue: data.stats.totalValue || 0
           });
         }
@@ -521,11 +703,19 @@ function Dashboard() {
   const getStatusBadgeStyle = (status) => {
     const baseStyle = { padding: '4px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: '500' };
     switch(status) {
-      case 'pending': return { ...baseStyle, backgroundColor: '#FEF3C7', color: '#92400E' };
       case 'approved': return { ...baseStyle, backgroundColor: '#D1FAE5', color: '#065F46' };
+      case 'pending': return { ...baseStyle, backgroundColor: '#FEF3C7', color: '#92400E' };
       case 'rejected': return { ...baseStyle, backgroundColor: '#FEE2E2', color: '#991B1B' };
-      case 'fulfilled': return { ...baseStyle, backgroundColor: '#DBEAFE', color: '#1E40AF' };
       default: return { ...baseStyle, backgroundColor: '#F3F4F6', color: '#1F2937' };
+    }
+  };
+
+  const getStatusLabel = (status) => {
+    switch(status) {
+      case 'approved': return 'Received';
+      case 'pending': return 'Pending';
+      case 'rejected': return 'Rejected';
+      default: return status;
     }
   };
 
@@ -539,14 +729,14 @@ function Dashboard() {
       React.createElement(
         'div',
         { className: 'card', style: { padding: '24px', textAlign: 'center' } },
-        React.createElement('h3', { style: { fontSize: '32px', margin: '0 0 8px 0', color: 'var(--color-primary)' } }, stats.itemsReceived),
+        React.createElement('h3', { style: { fontSize: '32px', margin: '0 0 8px 0', color: '#22c55e' } }, stats.itemsReceived),
         React.createElement('p', { style: { color: 'var(--color-text-secondary)', margin: 0 } }, 'Items Received')
       ),
       React.createElement(
         'div',
         { className: 'card', style: { padding: '24px', textAlign: 'center' } },
-        React.createElement('h3', { style: { fontSize: '32px', margin: '0 0 8px 0', color: 'var(--color-primary)' } }, stats.pendingRequests),
-        React.createElement('p', { style: { color: 'var(--color-text-secondary)', margin: 0 } }, 'Pending Requests')
+        React.createElement('h3', { style: { fontSize: '32px', margin: '0 0 8px 0', color: 'var(--color-primary)' } }, stats.availableItems),
+        React.createElement('p', { style: { color: 'var(--color-text-secondary)', margin: 0 } }, 'Items Available')
       ),
        React.createElement(
          'div',
@@ -558,7 +748,7 @@ function Dashboard() {
     React.createElement(
       'div',
       { className: 'card', style: { padding: '24px' } },
-      React.createElement('h2', { style: { marginBottom: '16px', fontSize: '20px', fontWeight: '600' } }, 'Recent Request History'),
+      React.createElement('h2', { style: { marginBottom: '16px', fontSize: '20px', fontWeight: '600' } }, 'Your Request History'),
       recentRequests.length > 0 ? React.createElement(
         'div',
         { style: { overflowX: 'auto' } },
@@ -571,10 +761,8 @@ function Dashboard() {
             React.createElement(
               'tr',
               { style: { borderBottom: '2px solid var(--color-card-border)' } },
-              React.createElement('th', { style: { padding: '12px', textAlign: 'left', fontWeight: '600', color: 'var(--color-text-secondary)', fontSize: '14px' } }, 'Request ID'),
               React.createElement('th', { style: { padding: '12px', textAlign: 'left', fontWeight: '600', color: 'var(--color-text-secondary)', fontSize: '14px' } }, 'Item Name'),
               React.createElement('th', { style: { padding: '12px', textAlign: 'left', fontWeight: '600', color: 'var(--color-text-secondary)', fontSize: '14px' } }, 'Category'),
-              React.createElement('th', { style: { padding: '12px', textAlign: 'left', fontWeight: '600', color: 'var(--color-text-secondary)', fontSize: '14px' } }, 'Quantity'),
               React.createElement('th', { style: { padding: '12px', textAlign: 'left', fontWeight: '600', color: 'var(--color-text-secondary)', fontSize: '14px' } }, 'Request Date'),
               React.createElement('th', { style: { padding: '12px', textAlign: 'left', fontWeight: '600', color: 'var(--color-text-secondary)', fontSize: '14px' } }, 'Status')
             )
@@ -582,26 +770,22 @@ function Dashboard() {
           React.createElement(
             'tbody',
             null,
-            recentRequests.map(request =>
-              React.createElement(
-                'tr',
-                { key: request.request_id, style: { borderBottom: '1px solid var(--color-card-border)' } },
-                React.createElement('td', { style: { padding: '12px', color: 'var(--color-text-secondary)' } }, `#${request.request_id}`),
-                React.createElement('td', { style: { padding: '12px', fontWeight: '500' } }, request.item_name),
-                React.createElement('td', { style: { padding: '12px', textTransform: 'capitalize' } }, request.category),
-                React.createElement('td', { style: { padding: '12px' } }, request.quantity_requested || 1),
-                React.createElement('td', { style: { padding: '12px', color: 'var(--color-text-secondary)' } }, new Date(request.request_date).toLocaleDateString()),
-                React.createElement('td', { style: { padding: '12px' } },
-                  React.createElement('span', { style: getStatusBadgeStyle(request.request_status) }, request.request_status.toUpperCase())
-                )
+            recentRequests.map(req => React.createElement(
+              'tr',
+              { key: req.request_id, style: { borderBottom: '1px solid var(--color-card-border)' } },
+              React.createElement('td', { style: { padding: '12px', fontSize: '14px' } }, req.item_name),
+              React.createElement('td', { style: { padding: '12px', fontSize: '14px' } }, req.category),
+              React.createElement('td', { style: { padding: '12px', fontSize: '14px' } }, new Date(req.request_date).toLocaleDateString()),
+              React.createElement('td', { style: { padding: '12px' } }, 
+                React.createElement('span', { style: getStatusBadgeStyle(req.request_status) }, getStatusLabel(req.request_status))
               )
-            )
+            ))
           )
         )
       ) : React.createElement(
-        'div',
-        { style: { textAlign: 'center', padding: '24px', color: 'var(--color-text-secondary)' } },
-        React.createElement('p', null, 'No requests yet. Browse items to make your first request!')
+        'p',
+        { style: { textAlign: 'center', color: 'var(--color-text-secondary)', padding: '32px' } },
+        'No requests yet. Browse available items to make your first request!'
       )
     )
   );
