@@ -1353,7 +1353,24 @@ app.put('/api/admin/:adminId/profile', async (req, res) => {
   }
 });
 
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Root redirect to admin portal
+app.get('/', (req, res) => {
+  res.redirect('/frontend/ADMIN/index.html');
+});
+
 const PORT = process.env.BACKEND_PORT || 3000;
-app.listen(PORT, () => {
+const HOST = process.env.HOST || '0.0.0.0';
+
+app.listen(PORT, HOST, () => {
   console.log(`Backend running on http://localhost:${PORT}`);
+  console.log('');
+  console.log('Portal URLs:');
+  console.log(`  Admin:     http://localhost:${PORT}/frontend/ADMIN/index.html`);
+  console.log(`  Donor:     http://localhost:${PORT}/frontend/donor-portal/index.html`);
+  console.log(`  Recipient: http://localhost:${PORT}/frontend/recipient-portal/index.html`);
 });
