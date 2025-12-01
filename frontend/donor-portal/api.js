@@ -86,6 +86,6 @@ window.updateDonorProfile = async (donorId, profileData) => {
 
 // Get donor dashboard stats
 window.getDonorStats = async (donorId) => {
-  const response = await fetch(`${API_BASE_URL}/donor/${donorId}/stats`);
+  const response = await fetch(`${API_BASE_URL}/donor/${donorId}/dashboard`);
   return handleResponse(response, 'Failed to fetch stats');
 };

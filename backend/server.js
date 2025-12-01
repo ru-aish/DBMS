@@ -1143,7 +1143,7 @@ app.get('/api/admin/recipients', async (req, res) => {
     const offset = (page - 1) * limit;
 
     let query = `SELECT r.recipient_id, r.org_name as full_name, r.org_type, r.contact_person as guardian_name,
-                 r.phone as guardian_contact, r.email, r.address, r.application_letter as needs_description,
+                 r.phone as guardian_contact, r.email, r.address, r.application_letter, r.application_letter as needs_description,
                  r.verification_status, r.recipient_code, r.registration_date
                  FROM RECIPIENTS r
                  WHERE 1=1`;
@@ -1479,6 +1479,40 @@ app.get('/api/donor/:donorId/dashboard', async (req, res) => {
   } catch (error) {
     console.error('Error fetching donor dashboard:', error);
     return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ============================================================================
+// SETUP ENDPOINT - Create demo admin if not exists
+// ============================================================================
+app.post('/api/setup/admin', async (req, res) => {
+  try {
+    const connection = await pool.getConnection();
+    
+    // Check if admin exists
+    const [existing] = await connection.execute(
+      'SELECT admin_id FROM ADMINS WHERE email = ?',
+      ['admin@demo.com']
+    );
+    
+    if (existing.length > 0) {
+      connection.release();
+      return res.json({ message: 'Demo admin already exists', admin_id: existing[0].admin_id });
+    }
+    
+    // Create demo admin with bcrypt password for 'password123'
+    const hashedPassword = await bcrypt.hash('password123', 10);
+    
+    const [result] = await connection.execute(
+      'INSERT INTO ADMINS (full_name, email, password, status) VALUES (?, ?, ?, ?)',
+      ['Demo Admin', 'admin@demo.com', hashedPassword, 'active']
+    );
+    
+    connection.release();
+    return res.json({ message: 'Demo admin created successfully', admin_id: result.insertId });
+  } catch (error) {
+    console.error('Setup error:', error);
+    return res.status(500).json({ message: 'Server error: ' + error.message });
   }
 });
 

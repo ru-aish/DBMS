@@ -1279,9 +1279,11 @@ function RequestsManagement() {
       filtered = filtered.filter(r => r.status === statusFilter);
     }
     if (searchTerm) {
+      const term = searchTerm.toLowerCase();
       filtered = filtered.filter(r => 
-        r.request_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        r.community_name?.toLowerCase().includes(searchTerm.toLowerCase())
+        String(r.request_id).includes(term) ||
+        (r.community_name && r.community_name.toLowerCase().includes(term)) ||
+        (r.item_name && r.item_name.toLowerCase().includes(term))
       );
     }
     setFilteredRequests(filtered);
@@ -1469,7 +1471,7 @@ function RequestsManagement() {
                 border: '1px solid #fcd34d', whiteSpace: 'pre-wrap', lineHeight: '1.6',
                 maxHeight: '200px', overflow: 'auto'
               }}>
-                {selectedRecipient.application_letter || 'No application letter provided'}
+                {selectedRecipient.needs_description || selectedRecipient.application_letter || 'No application letter provided'}
               </div>
             </div>
 

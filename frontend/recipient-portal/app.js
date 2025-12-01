@@ -83,12 +83,10 @@ const AuthProvider = ({ children }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           full_name: userData.name,
-          age: parseInt(userData.age) || 15,
-          gender: userData.gender || 'Other',
           guardian_name: userData.guardianName || 'Guardian',
           guardian_contact: userData.phone,
           address: userData.address || 'Not provided',
-          needs_description: userData.needs || ''
+          application_letter: userData.needs || userData.applicationLetter || ''
         })
       });
 
@@ -844,8 +842,15 @@ function BrowseItems() {
       if (response.ok) {
         setShowModal(false);
         alert('Request submitted successfully!');
+        // Refresh items list to show updated availability
+        const itemsResponse = await fetch('http://localhost:5000/api/items/available');
+        if (itemsResponse.ok) {
+          const data = await itemsResponse.json();
+          setItems(data.items || []);
+        }
       } else {
-        alert('Failed to submit request');
+        const errorData = await response.json();
+        alert(errorData.message || 'Failed to submit request');
       }
     } catch (error) {
       console.error('Error submitting request:', error);
